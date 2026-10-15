@@ -7,6 +7,10 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// RenameNoReplace moves from to to, failing with fs.ErrExist when to exists (never
+// a hard link where the file system can rename exclusively).
+func RenameNoReplace(from, to string) error { return renameNoReplace(from, to) }
+
 // renameNoReplace moves from to to, failing with fs.ErrExist when to exists. On
 // macOS this is one renamex_np(RENAME_EXCL) call, which works on every file system
 // that supports rename (also exFAT, where hard links do not exist); only a file

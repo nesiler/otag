@@ -77,12 +77,14 @@ func replace(f *File) error {
 		return err
 	}
 	defer func() { _ = os.Remove(tmp) }() // a no-op once it is in place
-	aside := f.Backup
-	if aside == "" {
-		aside = filepath.Join(filepath.Dir(f.Path), "."+filepath.Base(f.Path)+".otag-old")
-	}
+	// Always the same hidden name, so an interrupted change is found (Leftovers) and
+	// undone (Recover); the backup gets its own name only once the change is complete.
+	aside := AsideName(f.Path)
 	hook("aside", f.Path)
-	if aside, err = RenameUnique(f.Path, aside); err != nil {
+	if err := renameNoReplace(f.Path, aside); err != nil {
+		if errors.Is(err, fs.ErrExist) {
+			return errLeftover(aside, f.Path)
+		}
 		return err
 	}
 	old, err := os.ReadFile(aside)
@@ -99,17 +101,18 @@ func replace(f *File) error {
 	hook("place", f.Path)
 	if err := renameNoReplace(tmp, f.Path); err != nil {
 		if errors.Is(err, fs.ErrExist) {
-			return apperr.New(apperr.Conflict, "%s was saved while otag was writing it: your save is kept and otag's change was not written "+
-				"(the version before your save is %s); run the command again", f.Path, aside)
+			return apperr.New(apperr.Conflict, "%s was saved while otag was writing it: your save is kept and otag's change was not written; "+
+				"the version before your save is %s: delete it once you do not need it (otag changes the config again only then)", f.Path, aside)
 		}
 		if rerr := renameNoReplace(aside, f.Path); rerr != nil {
 			return fmt.Errorf("%w (and %s is still at %s: %v)", err, f.Path, aside, rerr)
 		}
 		return err
 	}
+	hook("placed", f.Path)
 	if f.Backup != "" {
-		f.Backup = aside
-		return nil
+		f.Backup, err = RenameUnique(aside, f.Backup)
+		return err
 	}
 	return os.Remove(aside)
 }
@@ -179,7 +182,7 @@ func numbered(base string, n int) string {
 }
 
 func writeTemp(path string, data []byte, perm os.FileMode) (string, error) {
-	f, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*")
+	f, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+tempMark+"*")
 	if err != nil {
 		return "", err
 	}
