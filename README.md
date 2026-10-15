@@ -77,6 +77,15 @@ otag daemon install
 otag doctor
 ```
 
+### Verifying a release
+
+Every release archive comes with a SHA-256 checksum (`checksums.txt`, checked by the install script), an SBOM,
+and a signed build provenance attestation that proves it was built from this repository by its release workflow:
+
+```sh
+gh attestation verify otag_<version>_darwin_arm64.tar.gz --repo nesiler/otag
+```
+
 ## Quick start
 
 1. Describe your agent accounts and profiles in `~/.config/otag/registry.toml`. Copy
