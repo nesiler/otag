@@ -172,6 +172,36 @@ func TestTaskPushAuthorization(t *testing.T) {
 	h.setPush("coordinator")
 	code, e = pushAs(nil, h.task2)
 	wantCode(t, "a task without a branch", code, e, "INVALID_TRANSITION")
+
+	// Only a live run that holds a token acts with its role: a coordinator from before
+	// run tokens (no token hash; CheckToken lets it through) gets nothing, ended or not,
+	// and an ended coordinator gets nothing with its token either. Reopen likewise.
+	d := h.db()
+	if _, err := d.Exec(`INSERT INTO runs (id, project_id, task_id, role, profile_id, profile_revision_id, account_id,
+		harness, status, ended_reason)
+SELECT 'al-old-r1', pr.id, NULL, 'coordinator', p.id, pv.id, pv.account_id, pv.harness, 'ended', 'stopped'
+FROM projects pr, profiles p JOIN profile_revisions pv ON pv.profile_id = p.id AND pv.config_hash = p.config_hash
+WHERE pr.name = 'alpha' AND p.name = 'sonnet'`); err != nil {
+		t.Fatal(err)
+	}
+	legacy := map[string]string{"OTAG_RUN_ID": "al-old-r1"}
+	code, e = pushAs(legacy, h.task)
+	wantCode(t, "an ended coordinator without a token pushes", code, e, "FORBIDDEN")
+	if _, err := d.Exec(`UPDATE runs SET status = 'ended', ended_reason = 'stopped' WHERE id = ?;
+		UPDATE runs SET status = 'idle', ended_reason = NULL WHERE id = 'al-old-r1'`, h.coord); err != nil {
+		t.Fatal(err)
+	}
+	code, e = pushAs(legacy, h.task)
+	wantCode(t, "a live coordinator without a token pushes", code, e, "FORBIDDEN")
+	code, e = h.as(legacy, "task", "reopen", h.task, "x")
+	wantCode(t, "a live coordinator without a token reopens", code, e, "FORBIDDEN")
+	code, e = pushAs(h.coordEnv, h.task)
+	wantCode(t, "an ended coordinator with its token pushes", code, e, "FORBIDDEN")
+	code, e = h.as(h.coordEnv, "task", "reopen", h.task, "x")
+	wantCode(t, "an ended coordinator with its token reopens", code, e, "FORBIDDEN")
+	if !strings.Contains(e.Error.Message, "ended") {
+		t.Fatalf("message %q", e.Error.Message)
+	}
 }
 
 // The push record (remote, branch, commit, time) is on the task and in task.pushed;

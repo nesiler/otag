@@ -15,7 +15,10 @@ import (
 // callerRun is the run a command acts for, verified by its OTAG_RUN_TOKEN (nil = the
 // human). It never takes the caller from flags: --run outside a run is a usage error,
 // and a caller that still looks like a run without OTAG_RUN_ID (runResidue) is
-// FORBIDDEN, so a child that dropped its identity does not pass for the human.
+// FORBIDDEN, so a child that dropped its identity does not pass for the human. Its
+// privileges (push, reopen) go only to a run that holds a token (CheckToken lets a run
+// created before tokens through without one, as childGate's coordinator check does
+// not) and has not ended: naming an old or finished run grants nothing.
 func (a *app) callerRun(ctx context.Context, cmd string) (*run.Run, error) {
 	runID := a.env.Getenv("OTAG_RUN_ID")
 	if runID == "" {
@@ -34,7 +37,22 @@ func (a *app) callerRun(ctx context.Context, cmd string) (*run.Run, error) {
 	if err := run.CheckToken(ctx, d, runID, a.env.Getenv(run.TokenEnv)); err != nil {
 		return nil, err
 	}
-	return run.Get(ctx, d, runID)
+	var hasToken bool
+	if err := d.QueryRowContext(ctx, `SELECT token_hash IS NOT NULL FROM runs WHERE id = ?`, runID).Scan(&hasToken); err != nil {
+		return nil, err
+	}
+	if !hasToken {
+		return nil, apperr.New(apperr.Forbidden, "run %s has no run token (created before tokens); it cannot act with "+
+			"its role: otag %s is refused", runID, cmd)
+	}
+	r, err := run.Get(ctx, d, runID)
+	if err != nil {
+		return nil, err
+	}
+	if r.Status == run.Ended {
+		return nil, apperr.New(apperr.Forbidden, "run %s has ended; an ended run cannot otag %s", runID, cmd)
+	}
+	return r, nil
 }
 
 // taskPush pushes a task branch (run.Manager.PushTask):
