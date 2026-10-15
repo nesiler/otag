@@ -158,7 +158,7 @@ func TestInitYesFresh(t *testing.T) {
 	if f.read("registry.toml") != before {
 		t.Fatal("the second init changed registry.toml")
 	}
-	if entries, _ := os.ReadDir(f.cfg); len(entries) != 2 {
+	if entries, _ := os.ReadDir(f.cfg); len(entries) != 3 { // registry.toml, projects/, the config lock
 		t.Fatalf("config dir: %v", entries)
 	}
 	if out := f.ok("init", "--yes", "--no-daemon"); !strings.Contains(out, "nothing to add") {

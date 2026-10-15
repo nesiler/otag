@@ -16,6 +16,7 @@ import (
 	"github.com/nesiler/otag/internal/quota"
 	"github.com/nesiler/otag/internal/registry"
 	"github.com/nesiler/otag/internal/setup"
+	"github.com/nesiler/otag/internal/tmux"
 )
 
 type check struct {
@@ -41,17 +42,17 @@ func cmdDoctor(ctx context.Context, a *app, args []string) (result, error) {
 	if !a.configured() {
 		add("registry", "fail", "otag init", "otag is not set up yet: %s does not exist", reg)
 	} else if c, err := registry.Load(a.configDir(), a.env.Getenv); err != nil {
-		add("registry", "fail", "edit the files under "+a.configDir()+", then `otag sync` (or start over: `otag init --force`)",
+		add("registry", "fail", "edit the files under "+shq(a.configDir())+", then `otag sync` (or start over: `otag init --force`)",
 			"%s", errText(err))
 	} else {
 		cfg = c
 		add("registry", "ok", "", "%s: %d accounts, %d profiles, %d projects",
 			a.configDir(), len(cfg.Accounts), len(cfg.Profiles), len(cfg.Projects))
 		for _, w := range cfg.Warnings {
-			fix := "edit " + reg
+			fix := "edit " + shq(reg)
 			if name, ok := strings.CutPrefix(w, "project "); ok {
 				name, _, _ = strings.Cut(name, ":")
-				fix = fmt.Sprintf("edit %s, or `otag project remove %s`", setup.ProjectFile(a.configDir(), name), name)
+				fix = fmt.Sprintf("edit %s, or `otag project remove %s`", shq(setup.ProjectFile(a.configDir(), name)), shq(name))
 			}
 			add("registry", "warn", fix, "%s", w)
 		}
@@ -63,7 +64,7 @@ func cmdDoctor(ctx context.Context, a *app, args []string) (result, error) {
 	d, err := a.openDB(ctx)
 	switch {
 	case err != nil:
-		add("database", "fail", "check that "+filepath.Dir(a.dbPath())+" is writable (or set OTAG_DB)", "%v", err)
+		add("database", "fail", "check that "+shq(filepath.Dir(a.dbPath()))+" is writable (or set OTAG_DB)", "%v", err)
 	case d.ReadOnly():
 		add("database", "fail", "upgrade otag (`brew upgrade otag`)",
 			"%s: schema v%d is newer than this binary (v%d); writes refused", d.Path, d.Version, d.Latest)
@@ -76,13 +77,13 @@ func cmdDoctor(ctx context.Context, a *app, args []string) (result, error) {
 		_ = d.QueryRowContext(ctx, "PRAGMA quick_check").Scan(&integrity)
 		status, fix := "ok", ""
 		if mode != "wal" || fk != 1 || integrity != "ok" {
-			status, fix = "fail", "restore "+d.Path+" from a backup, or move it away to start a new database"
+			status, fix = "fail", "restore "+shq(d.Path)+" from a backup, or move it away to start a new database"
 		}
 		add("database", status, fix, "%s: schema v%d, journal=%s, foreign_keys=%d, quick_check=%s",
 			d.Path, d.Version, mode, fk, integrity)
 		// The file is forced to 0600; an existing directory is never chmod-ed, only reported.
 		if st, err := os.Stat(filepath.Dir(d.Path)); err == nil && st.Mode().Perm()&0o077 != 0 {
-			add("database", "warn", "chmod 700 "+filepath.Dir(d.Path), "directory %s is accessible by other users (mode %v)",
+			add("database", "warn", "chmod 700 "+shq(filepath.Dir(d.Path)), "directory %s is accessible by other users (mode %v)",
 				filepath.Dir(d.Path), st.Mode().Perm())
 		}
 	}
@@ -133,7 +134,7 @@ func cmdDoctor(ctx context.Context, a *app, args []string) (result, error) {
 			}
 			if acc.Command != "" {
 				if _, ok := setup.LookPath(acc.Command, a.pathEnv()); !ok && !isExecutable(acc.Command) {
-					add("account "+name, "warn", "set command to an absolute path in "+reg,
+					add("account "+name, "warn", "set command to an absolute path in "+shq(reg),
 						"command %q not on PATH (shell functions are not visible to otag)", acc.Command)
 				}
 			}
@@ -142,10 +143,10 @@ func cmdDoctor(ctx context.Context, a *app, args []string) (result, error) {
 
 	cfgFile := daemon.ConfigFile(a.configDir())
 	if _, warns, err := daemon.LoadConfig(cfgFile); err != nil {
-		add("daemon config", "fail", "edit "+cfgFile, "%v", err)
+		add("daemon config", "fail", "edit "+shq(cfgFile), "%v", err)
 	} else {
 		for _, w := range warns {
-			add("daemon config", "warn", "edit "+cfgFile, "%s", w)
+			add("daemon config", "warn", "edit "+shq(cfgFile), "%s", w)
 		}
 	}
 	logPath := filepath.Join(paths.DataDir(a.env.Getenv), "daemon.log")
@@ -156,7 +157,7 @@ func cmdDoctor(ctx context.Context, a *app, args []string) (result, error) {
 	} else {
 		fix := "otag daemon install"
 		if _, err := os.Stat(a.launchd().PlistFile()); err == nil {
-			fix += "   (reloads it; see " + logPath + ")"
+			fix += "   (reloads it; see " + shq(logPath) + ")"
 		}
 		add("daemon", "warn", fix, "not running: no crash reaping, stall watchdog or fallback")
 	}
@@ -174,7 +175,7 @@ func cmdDoctor(ctx context.Context, a *app, args []string) (result, error) {
 				path := quota.OpenCodeConfigPath(acc.ConfigDir, home)
 				for _, v := range quota.EnvRefs(path) {
 					if env[v] == "" {
-						add("daemon env", "warn", fmt.Sprintf("add %q to [daemon] env_passthrough in %s, then `otag daemon install`", v, cfgFile),
+						add("daemon env", "warn", fmt.Sprintf("add %q to [daemon] env_passthrough in %s, then `otag daemon install`", v, shq(cfgFile)),
 							"%s (account %s) uses {env:%s}, which the launch agent does not set", path, name, v)
 					}
 				}
@@ -200,7 +201,7 @@ func cmdDoctor(ctx context.Context, a *app, args []string) (result, error) {
 				}) {
 					continue
 				}
-				add("profile "+name, "warn", fmt.Sprintf("add %q to env_passthrough of [profiles.%s] in %s, then `otag sync`", v, name, reg),
+				add("profile "+name, "warn", fmt.Sprintf("add %q to env_passthrough of [profiles.%s] in %s, then `otag sync`", v, name, shq(reg)),
 					"%s uses {env:%s}, which runs do not get (they start with a clean environment)", path, v)
 			}
 		}
@@ -227,15 +228,19 @@ func cmdDoctor(ctx context.Context, a *app, args []string) (result, error) {
 func loginFix(acc registry.Account) string {
 	switch acc.Harness {
 	case "claude":
-		return "log in once: CLAUDE_CONFIG_DIR=" + acc.ConfigDir + " claude"
+		return "log in once: CLAUDE_CONFIG_DIR=" + shq(acc.ConfigDir) + " claude"
 	case "codex":
-		return "log in once: CODEX_HOME=" + acc.ConfigDir + " codex login"
+		return "log in once: CODEX_HOME=" + shq(acc.ConfigDir) + " codex login"
 	case "opencode":
-		return "create " + filepath.Join(acc.ConfigDir, "config", "opencode", "opencode.json") +
+		return "create " + shq(filepath.Join(acc.ConfigDir, "config", "opencode", "opencode.json")) +
 			" (config_dir is an account root), or remove config_dir"
 	}
-	return "create " + acc.ConfigDir + ", or remove config_dir"
+	return "create " + shq(acc.ConfigDir) + ", or remove config_dir"
 }
+
+// shq quotes s for a shell when it needs it (a path with spaces), so a fix can be
+// pasted as is.
+func shq(s string) string { return tmux.ShellQuote([]string{s}) }
 
 func isExecutable(p string) bool {
 	if !filepath.IsAbs(p) {

@@ -10,6 +10,8 @@ import (
 	"syscall"
 	"text/tabwriter"
 
+	"github.com/charmbracelet/x/term"
+
 	"github.com/nesiler/otag/internal/adapter/builtin"
 	"github.com/nesiler/otag/internal/apperr"
 	"github.com/nesiler/otag/internal/identity"
@@ -360,12 +362,9 @@ func execAttach(ctx context.Context, a *app, tc *tmux.Client, session, pane stri
 	return syscall.Exec(path, argv, env)
 }
 
-// isTerminal reports whether v (stdin or stdout) is a terminal.
+// isTerminal reports whether v (stdin or stdout) is a terminal: a tty, not merely a
+// character device (/dev/null is one too).
 func isTerminal(v any) bool {
 	f, ok := v.(*os.File)
-	if !ok {
-		return false
-	}
-	st, err := f.Stat()
-	return err == nil && st.Mode()&os.ModeCharDevice != 0
+	return ok && term.IsTerminal(f.Fd())
 }

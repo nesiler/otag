@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"io"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/nesiler/otag/internal/apperr"
+	"github.com/nesiler/otag/internal/db"
 	"github.com/nesiler/otag/internal/paths"
 	"github.com/nesiler/otag/internal/registry"
 	"github.com/nesiler/otag/internal/setup"
@@ -63,7 +65,8 @@ func (a *app) home() string {
 }
 
 func (a *app) prober() setup.Prober {
-	return setup.Prober{PATH: a.pathEnv(), Home: a.home(), CodexHome: a.env.Getenv("CODEX_HOME")}
+	return setup.Prober{PATH: a.pathEnv(), Home: a.home(), CodexHome: a.env.Getenv("CODEX_HOME"),
+		ClaudeConfigDir: a.env.Getenv("CLAUDE_CONFIG_DIR")}
 }
 
 // configured reports whether registry.toml exists.
@@ -102,28 +105,16 @@ func (a *app) setupBase(ctx context.Context, force bool, detect bool) (setup.Bas
 	default:
 		b.Existing = cfg
 	}
-	if _, err := os.Stat(a.dbPath()); err == nil {
-		d, err := a.openDB(ctx)
-		if err != nil {
-			return b, err
+	if exists {
+		if raw, err := os.ReadFile(setup.RegistryFile(b.ConfigDir)); err == nil {
+			b.RegistrySum = setup.Sum(raw)
 		}
-		rows, err := d.QueryContext(ctx, `SELECT name, prefix FROM projects`)
-		if err != nil {
-			return b, err
-		}
-		b.Known = map[string]string{}
-		for rows.Next() {
-			var name, prefix string
-			if err := rows.Scan(&name, &prefix); err != nil {
-				_ = rows.Close()
-				return b, err
-			}
-			b.Known[name] = prefix
-		}
-		_ = rows.Close()
-		if err := rows.Err(); err != nil {
-			return b, err
-		}
+	}
+	// The database is only looked at here (read-only, never created or migrated):
+	// nothing is written before the user agrees. Apply reads it again, writable.
+	if ro, err := db.OpenReadOnly(a.dbPath()); err == nil {
+		b.Known, _ = knownProjects(ctx, ro)
+		_ = ro.Close()
 	}
 	if _, err := os.Stat(a.launchd().PlistFile()); err == nil {
 		b.DaemonInstalled = true
@@ -132,6 +123,27 @@ func (a *app) setupBase(ctx context.Context, force bool, detect bool) (setup.Bas
 		b.SkillInstalled = true
 	}
 	return b, nil
+}
+
+// knownProjects maps every project the database knows (retired ones too) to its
+// prefix.
+func knownProjects(ctx context.Context, q interface {
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+}) (map[string]string, error) {
+	rows, err := q.QueryContext(ctx, `SELECT name, prefix FROM projects`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	known := map[string]string{}
+	for rows.Next() {
+		var name, prefix string
+		if err := rows.Scan(&name, &prefix); err != nil {
+			return nil, err
+		}
+		known[name] = prefix
+	}
+	return known, rows.Err()
 }
 
 // initData is the result of `otag init` and `otag project add`.
@@ -198,6 +210,20 @@ func (a *app) applySetup(ctx context.Context, b setup.Base, c setup.Choices) (in
 		data.Profiles = append(data.Profiles, p.Name)
 	}
 	data.Project = c.Project
+	// One config change at a time; under the lock the database (now opened writable)
+	// and the registry are read again, so the checks see the current state.
+	unlock, err := setup.LockConfig(b.ConfigDir, 10*time.Second)
+	if err != nil {
+		return data, err
+	}
+	defer unlock()
+	d, err := a.openDB(ctx)
+	if err != nil {
+		return data, err
+	}
+	if b.Known, err = knownProjects(ctx, d); err != nil {
+		return data, err
+	}
 	files, err := b.Files(c, time.Now())
 	if err != nil {
 		return data, err

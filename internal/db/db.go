@@ -152,6 +152,22 @@ func open(ctx context.Context, path string, migs []migration, o Options) (*DB, e
 	return d, nil
 }
 
+// OpenReadOnly opens an existing database for a look that writes nothing at all
+// (mode=ro, query_only, immutable): it is never created, migrated or chmod-ed, and
+// not even a -wal or -shm file is made. immutable skips SQLite's locking and the WAL,
+// so a concurrent writer's latest commits may be missing: callers use it for hints
+// (the setup wizard before the user agreed to anything) and check again with Open.
+func OpenReadOnly(path string) (*sql.DB, error) {
+	path, err := filepath.Abs(path)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := os.Stat(path); err != nil {
+		return nil, err
+	}
+	return sql.Open("sqlite", dsn(path, true, 2000)+"&immutable=1")
+}
+
 // ensureFile creates the parent directory (0700) and the database file (0600), and
 // tightens the mode of an existing database file. SQLite gives -wal/-shm the same mode.
 func ensureFile(path string) error {

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"io"
 	"os"
@@ -11,6 +12,8 @@ import (
 	"time"
 
 	"github.com/nesiler/otag/internal/apperr"
+	"github.com/nesiler/otag/internal/db"
+	"github.com/nesiler/otag/internal/identity"
 	"github.com/nesiler/otag/internal/paths"
 	"github.com/nesiler/otag/internal/registry"
 	"github.com/nesiler/otag/internal/setup"
@@ -217,6 +220,14 @@ func projectRemove(ctx context.Context, a *app, args []string) (result, error) {
 	if len(pos) != 1 {
 		return result{}, usageErr("usage: otag project remove <name>")
 	}
+	if !a.configured() {
+		return result{}, errNotConfigured(a.configDir())
+	}
+	unlock, err := setup.LockConfig(a.configDir(), 10*time.Second)
+	if err != nil {
+		return result{}, err
+	}
+	defer unlock()
 	cfg, err := a.loadRegistry()
 	if err != nil {
 		return result{}, err
@@ -234,28 +245,24 @@ func projectRemove(ctx context.Context, a *app, args []string) (result, error) {
 	if err != nil {
 		return result{}, err
 	}
-	var live int
-	if err := d.QueryRowContext(ctx, `SELECT count(*) FROM runs r JOIN projects p ON p.id = r.project_id
-		WHERE p.name = ? AND r.status <> 'ended'`, proj.Name).Scan(&live); err != nil {
+	// Checked first for a clear refusal before the file moves, and again in the
+	// transaction that retires the project: a run started in between is seen there.
+	if err := noLiveRuns(ctx, d, proj.Name); err != nil {
 		return result{}, err
 	}
-	if live > 0 {
-		return result{}, apperr.New(apperr.Conflict, "project %s has %d run(s) that have not ended: stop them first (`otag run list --project %s`)",
-			proj.Name, live, proj.Name)
-	}
-	kept := proj.File + ".removed-" + time.Now().Format("20060102-150405")
-	if err := os.Rename(proj.File, kept); err != nil {
-		return result{}, err
-	}
-	res, err := cmdSync(ctx, a, nil)
+	kept, err := setup.RenameUnique(proj.File, proj.File+".removed-"+time.Now().Format("20060102-150405"))
 	if err != nil {
-		// Put the file back: the registry stays as it was.
-		if rerr := os.Rename(kept, proj.File); rerr != nil {
-			return result{}, fmt.Errorf("%w (and restoring %s failed: %v)", err, proj.File, rerr)
-		}
 		return result{}, err
 	}
-	sr := res.data.(registry.SyncResult)
+	sr, err := retireProject(ctx, a, d, proj.Name)
+	if err != nil {
+		// Put the file back (never over a new one): the registry stays as it was.
+		if rerr := os.Link(kept, proj.File); rerr != nil {
+			return result{}, fmt.Errorf("%w (and restoring %s from %s failed: %v)", err, proj.File, kept, rerr)
+		}
+		_ = os.Remove(kept)
+		return result{}, err
+	}
 	data := map[string]any{"project": proj.Name, "file": kept, "sync": sr}
 	return result{data: data, human: func(w io.Writer) {
 		_, _ = fmt.Fprintf(w, "removed project %s; its file is kept as %s\n", proj.Name, setup.TildePath(kept, a.home()))
@@ -265,4 +272,48 @@ func projectRemove(ctx context.Context, a *app, args []string) (result, error) {
 			_, _ = fmt.Fprintf(a.env.Stderr, "warning: %s\n", strings.TrimSpace(warn))
 		}
 	}}, nil
+}
+
+// beforeRetire runs between moving a project's file aside and the transaction that
+// retires it (tests: a run starting in that window).
+var beforeRetire func()
+
+// noLiveRuns refuses while project has runs that have not ended.
+func noLiveRuns(ctx context.Context, q interface {
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}, project string) error {
+	var live int
+	if err := q.QueryRowContext(ctx, `SELECT count(*) FROM runs r JOIN projects p ON p.id = r.project_id
+		WHERE p.name = ? AND r.status <> 'ended'`, project).Scan(&live); err != nil {
+		return err
+	}
+	if live > 0 {
+		return apperr.New(apperr.Conflict, "project %s has %d run(s) that have not ended: stop them first (`otag run list --project %s`)",
+			project, live, project)
+	}
+	return nil
+}
+
+// retireProject syncs the registry (without the project's file) in one write
+// transaction (BEGIN IMMEDIATE) that first checks the project has no live run: a run
+// start is a write transaction too, so it either committed before (and is seen
+// here) or runs after and finds the project retired.
+func retireProject(ctx context.Context, a *app, d *db.DB, project string) (registry.SyncResult, error) {
+	if beforeRetire != nil {
+		beforeRetire()
+	}
+	cfg, err := registry.Load(a.configDir(), a.env.Getenv)
+	if err != nil {
+		return registry.SyncResult{}, err
+	}
+	var sr registry.SyncResult
+	err = d.Tx(ctx, func(tx *sql.Tx) error {
+		if err := noLiveRuns(ctx, tx, project); err != nil {
+			return err
+		}
+		var err error
+		sr, err = registry.Sync(ctx, tx, cfg, a.actorName(identity.Identity{}))
+		return err
+	})
+	return sr, err
 }
