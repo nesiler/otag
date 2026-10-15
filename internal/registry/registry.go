@@ -157,6 +157,25 @@ func Load(dir string, getenv paths.Getenv) (*Config, error) {
 	return cfg, nil
 }
 
+// LoadProjects reads only <dir>/projects/*.toml (no validation against the
+// registry): what `otag init --force` keeps while it replaces registry.toml.
+func LoadProjects(dir string, getenv paths.Getenv) ([]Project, error) {
+	files, err := filepath.Glob(filepath.Join(dir, "projects", "*.toml"))
+	if err != nil {
+		return nil, err
+	}
+	cfg := &Config{Dir: dir}
+	for _, f := range files {
+		p, err := loadProject(f)
+		if err != nil {
+			return nil, err
+		}
+		cfg.Projects = append(cfg.Projects, p)
+	}
+	cfg.normalize(getenv)
+	return cfg.Projects, nil
+}
+
 func loadProject(file string) (Project, error) {
 	var p Project
 	b, err := os.ReadFile(file)
