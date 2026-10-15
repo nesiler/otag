@@ -515,7 +515,9 @@ The rest of this section describes strict; light differs as the table says.
   closed) and the config hard denies apply there.
 - **The guard is best effort**: fast, explanatory feedback in front of the sandbox. It
   parses the shell line itself and does not parse `python -c`, `node -e`, scripts or
-  make targets.
+  make targets. Heredoc bodies are not recognised as data: a line in one that reads like a
+  refused command (`git push` in `cat <<'EOF'`) is refused too. Write such text with the
+  agent's file tool instead.
 - **Hooks fail closed** for guarded kinds (the bridge, above).
 - **Child privileges**: a child acts only for its own run. The CLI refuses `--run`/`--project`
   pointing elsewhere inside a run (`OTAG_RUN_ID`), `otag done`/`otag fail` and `otag event`
