@@ -29,8 +29,8 @@ class Otag < Formula
   depends_on "tmux"
 
   def install
+    # std_go_args already adds -s -w.
     ldflags = %W[
-      -s -w
       -X main.version=#{version}
       -X main.commit=${commit}
       -X main.date=#{time.iso8601}
