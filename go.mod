@@ -9,8 +9,8 @@ require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/charmbracelet/x/ansi v0.11.9
 	github.com/charmbracelet/x/term v0.2.2
-	github.com/coder/websocket v1.8.14
-	golang.org/x/sys v0.48.0
+	github.com/coder/websocket v1.8.15
+	golang.org/x/sys v0.49.0
 	modernc.org/sqlite v1.60.1
 )
 
