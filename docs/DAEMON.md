@@ -477,7 +477,8 @@ come later). The project settings (`base`, `branch_prefix`, `remote`, `push`) ar
   event with the task's latest run; the next run's prior-attempt summary (or, for a task
   that never ran, its prompt) and `otag prime` carry it, like a review rejection. Its
   accepted reviews become stale (see "Review"), the queued deliveries of its done notice
-  expire and their notifications are acknowledged; when it is done again a new notice
+  expire and their notifications are acknowledged (one the daemon has not shown yet is
+  never shown: channel `retracted`); when it is done again a new notice
   is sent (`done:<task>:<n>`). A delivered task (`INVALID_TRANSITION`: add a follow-up
   task), a review task (reopen the reviewed task), a task that is not done and one with
   a run that has not ended are refused.

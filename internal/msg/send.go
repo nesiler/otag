@@ -540,7 +540,8 @@ func closeQuestion(ctx context.Context, tx *sql.Tx, m *Message, reason string, a
 }
 
 // Retract withdraws message id: its deliveries that were not taken yet (queued) expire
-// with why, and the notifications about it are acknowledged. What a recipient already
+// with why, and the notifications about it are acknowledged and marked handled, so the
+// daemon never shows one it has not shown yet (notify.Pending). What a recipient already
 // has stays. It returns how many deliveries expired.
 func Retract(ctx context.Context, tx *sql.Tx, id int64, why string, a Actor) (int, error) {
 	ds, err := deliveries(ctx, tx, " WHERE d.message_id = ? AND d.state = 'queued'", id)
@@ -552,7 +553,12 @@ func Retract(ctx context.Context, tx *sql.Tx, id int64, why string, a Actor) (in
 			return 0, err
 		}
 	}
-	_, err = tx.ExecContext(ctx, `UPDATE notifications SET read_at = ? WHERE message_id = ? AND read_at IS NULL`, db.Now(), id)
+	// Read, and handled for the daemon too: one it has not shown yet (sent_at NULL) is
+	// never shown (notify.Pending), channel "retracted".
+	now := db.Now()
+	_, err = tx.ExecContext(ctx, `UPDATE notifications SET read_at = coalesce(read_at, ?),
+		channel = CASE WHEN sent_at IS NULL THEN 'retracted' ELSE channel END, sent_at = coalesce(sent_at, ?)
+		WHERE message_id = ? AND (read_at IS NULL OR sent_at IS NULL)`, now, now, id)
 	return len(ds), err
 }
 

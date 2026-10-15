@@ -10,6 +10,7 @@ import (
 
 	"github.com/nesiler/otag/internal/apperr"
 	"github.com/nesiler/otag/internal/msg"
+	"github.com/nesiler/otag/internal/notify"
 	"github.com/nesiler/otag/internal/paths"
 	"github.com/nesiler/otag/internal/task"
 	"github.com/nesiler/otag/internal/workspace"
@@ -167,9 +168,15 @@ func TestReopen(t *testing.T) {
 	if len(notices) != 1 {
 		t.Fatalf("notices %d", len(notices))
 	}
-	if _, err := m.DB.Exec(`INSERT INTO notifications (project_id, task_id, message_id, kind, title) VALUES (1, 'x-1', ?, 'msg.human', 'done')`,
-		notices[0].ID); err != nil {
+	// One notification the daemon has not shown yet, one it has.
+	if _, err := m.DB.Exec(`INSERT INTO notifications (project_id, task_id, message_id, kind, title) VALUES (1, 'x-1', ?, 'msg.human', 'done');
+INSERT INTO notifications (project_id, task_id, message_id, kind, title, sent_at, channel)
+VALUES (1, 'x-1', ?, 'msg.human', 'done again', '2026-10-15T00:00:00.000Z', 'osascript')`,
+		notices[0].ID, notices[0].ID); err != nil {
 		t.Fatal(err)
+	}
+	if pending, _ := notify.Pending(ctx, m.DB, 10); len(pending) != 1 {
+		t.Fatalf("fixture: pending %+v", pending)
 	}
 	if _, err := m.Reopen(ctx, ReopenInput{Task: rt, Reason: "x"}); apperr.Code(err) != apperr.InvalidTransition {
 		t.Fatalf("reopen a review task: %v", err)
@@ -195,6 +202,21 @@ func TestReopen(t *testing.T) {
 	_ = m.DB.QueryRow(`SELECT count(*) FROM notifications WHERE read_at IS NULL`).Scan(&unread)
 	if unread != 0 {
 		t.Fatal("the done notice's notification is still unread")
+	}
+	// The daemon never announces the reopened task as ready to deliver.
+	if pending, err := notify.Pending(ctx, m.DB, 10); err != nil || len(pending) != 0 {
+		t.Fatalf("pending after the reopen: %+v %v", pending, err)
+	}
+	var channels []string
+	rows, _ := m.DB.Query(`SELECT channel FROM notifications ORDER BY id`)
+	for rows.Next() {
+		var c string
+		_ = rows.Scan(&c)
+		channels = append(channels, c)
+	}
+	_ = rows.Close()
+	if strings.Join(channels, ",") != "retracted,osascript" {
+		t.Fatalf("channels %v", channels)
 	}
 	var data string
 	_ = m.DB.QueryRow(`SELECT data FROM events WHERE kind = 'task.reopened' AND task_id = 'x-1'`).Scan(&data)
