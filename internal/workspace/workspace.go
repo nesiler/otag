@@ -39,6 +39,9 @@ type Spec struct {
 	// Detach, when set, is the commit a detached worktree is created at (a review run
 	// inspects the reviewed task's head); no branch is created.
 	Detach string
+	// LockDir is where the lock that serializes base fetches of one repository across
+	// processes lives (<data>/locks); "" takes no lock.
+	LockDir string
 }
 
 // Result is a prepared workspace.
@@ -96,7 +99,7 @@ func Prepare(ctx context.Context, s Spec) (Result, error) {
 	if !exists {
 		// The base is only needed for a new branch; a surviving one keeps its own.
 		var err error
-		if r.BaseRef, r.BaseSHA, err = ResolveBase(ctx, s.ProjectPath, s.Base); err != nil {
+		if r.BaseRef, r.BaseSHA, err = ResolveBase(ctx, s.ProjectPath, s.Base, s.LockDir); err != nil {
 			return Result{}, err
 		}
 	}
@@ -160,8 +163,10 @@ func prepareDetached(ctx context.Context, s Spec) (Result, error) {
 // refs/remotes/<remote>/<branch>, where <remote> is a configured remote) is fetched
 // first (`git fetch <remote> <branch>` into its remote-tracking ref); a failed fetch is
 // an error, never a silent fallback to a stale ref. Any other ref or commit is used as
-// it is and must resolve to a commit.
-func ResolveBase(ctx context.Context, projectPath, base string) (ref, sha string, err error) {
+// it is and must resolve to a commit. The fetch and the read of the fetched commit run
+// under the repository's lock in lockDir (lockRepo), and a fetch that fails is tried
+// once more (another git, outside otag, may have moved the ref meanwhile).
+func ResolveBase(ctx context.Context, projectPath, base, lockDir string) (ref, sha string, err error) {
 	if base == "" {
 		ref, sha = head(ctx, projectPath)
 		if sha == "" {
@@ -173,9 +178,20 @@ func ResolveBase(ctx context.Context, projectPath, base string) (ref, sha string
 		return "", "", fmt.Errorf("base: %w", err)
 	}
 	if remote, branch, ok := RemoteTracking(ctx, projectPath, base); ok {
+		unlock, err := lockRepo(ctx, lockDir, projectPath)
+		if err != nil {
+			return "", "", fmt.Errorf("base %s: %w", base, err)
+		}
+		defer unlock()
 		spec := "+refs/heads/" + branch + ":refs/remotes/" + remote + "/" + branch
-		if _, err := git(ctx, projectPath, "fetch", "--quiet", "--no-tags", "--no-recurse-submodules", remote, spec); err != nil {
-			return "", "", fmt.Errorf("base %s: fetch %s %s failed: %w", base, remote, branch, err)
+		fetch := func() error {
+			_, err := git(ctx, projectPath, "fetch", "--quiet", "--no-tags", "--no-recurse-submodules", remote, spec)
+			return err
+		}
+		if err := fetch(); err != nil {
+			if err = fetch(); err != nil {
+				return "", "", fmt.Errorf("base %s: fetch %s %s failed: %w", base, remote, branch, err)
+			}
 		}
 		sha, err := git(ctx, projectPath, "rev-parse", "--verify", "-q", "refs/remotes/"+remote+"/"+branch+"^{commit}")
 		if err != nil {

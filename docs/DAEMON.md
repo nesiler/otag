@@ -446,7 +446,9 @@ come later). The project settings (`base`, `branch_prefix`, `remote`, `push`) ar
   --base <ref>`; refused once the task has its worktree: the branch already starts
   there), else the project's `base`, else the checkout's HEAD. A remote-tracking base
   (`origin/dev`) is fetched first: `git fetch <remote> +refs/heads/<branch>:refs/remotes/<remote>/<branch>`
-  in the project, outside any transaction. A failed fetch fails the start
+  in the project, outside any transaction, one at a time per repository across otag
+  processes (a lock in `<data>/locks`; parallel fetches of one ref otherwise fail with
+  "cannot lock ref"), and tried once more if it fails. A failed fetch fails the start
   (`launch_failed`, cause `workspace`; the task goes back to `ready`), never falling back
   to a stale ref. The workspace records the ref and commit (`base_ref`, `base_sha`).
 - **`otag task push <task> [--force]`** (`run.Manager.PushTask`) pushes the task's

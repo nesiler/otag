@@ -30,6 +30,7 @@ func (m *Manager) launch(ctx context.Context, p *plan, ad adapter.Adapter) (*Sta
 	if p.mode == workspace.Worktree {
 		wsSpec.Path = paths.Worktree(getenv, p.project, p.taskID)
 		wsSpec.Branch, wsSpec.Base, wsSpec.Known = p.branch, p.base, p.knownBranch
+		wsSpec.LockDir = filepath.Join(paths.DataDir(getenv), "locks") // base fetches of one repository, one at a time
 		if p.branch == "" {
 			// A review run: detached at the reviewed head (the reviewed branch's tip
 			// when no done run recorded it).
