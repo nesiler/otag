@@ -22,8 +22,12 @@ var PushBlock = [][2]string{
 // PushSpec is one push of a task branch.
 type PushSpec struct {
 	ProjectPath string
-	Remote      string
-	Branch      string // the local branch; pushed to the remote branch of the same name
+	// Dir is where git push runs, normally the task's worktree, so the hooks that run are
+	// the task branch's own (a relative core.hooksPath resolves against the working tree
+	// git runs in). "" = ProjectPath.
+	Dir    string
+	Remote string
+	Branch string // the local branch; pushed to the remote branch of the same name
 	// Lease, when set, forces the push with --force-with-lease: the remote branch must
 	// still be at *Lease ("" = it must not exist). Nil is a plain (fast-forward) push.
 	Lease *string
@@ -61,7 +65,11 @@ func Push(ctx context.Context, s PushSpec) (PushResult, error) {
 		args = append(args, "--force-with-lease=refs/heads/"+s.Branch+":"+*s.Lease)
 	}
 	args = append(args, "--", s.Remote, sha+":refs/heads/"+s.Branch)
-	out, errOut, err := gitEnv(ctx, s.ProjectPath, pushEnv(os.Environ()), args...)
+	dir := s.Dir
+	if dir == "" {
+		dir = s.ProjectPath
+	}
+	out, errOut, err := gitEnv(ctx, dir, pushEnv(os.Environ()), args...)
 	if err != nil {
 		for _, line := range strings.Split(out, "\n") {
 			if strings.HasPrefix(line, "!") {

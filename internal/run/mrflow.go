@@ -175,13 +175,16 @@ func (m *Manager) PushTask(ctx context.Context, in PushInput) (*PushResult, erro
 	if t.Push != nil {
 		res.PreviousSHA = t.Push.SHA
 	}
-	if dir := m.taskWorktree(ctx, t.ID); dir != "" {
+	dir := m.taskWorktree(ctx, t.ID)
+	if dir != "" {
 		if st, err := workspace.Changes(ctx, dir); err == nil && st != "" {
 			res.Warnings = append(res.Warnings, fmt.Sprintf("the worktree %s has uncommitted changes; only commits are pushed",
 				dir))
 		}
 	}
-	spec := workspace.PushSpec{ProjectPath: projectPath, Remote: remote, Branch: t.Branch}
+	// The push runs in the task's worktree when it has one, so the project's hooks are the
+	// task branch's (a relative core.hooksPath), not whatever the main checkout has.
+	spec := workspace.PushSpec{ProjectPath: projectPath, Dir: dir, Remote: remote, Branch: t.Branch}
 	if in.Force {
 		lease := ""
 		if p := t.Push; p != nil && p.Remote == remote && p.Branch == t.Branch {
