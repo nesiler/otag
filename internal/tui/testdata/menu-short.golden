@@ -8,9 +8,9 @@
     ⊘ al-16 Blocked thing   │ Reply           r      — no open question here   │
   ▾ ● al-12 Fix login       │ Review…         v      — select a task in review │
       ● r2 sonnet           │ Deliver…        D                                │
-      +1 earlier            │ Edit…           e                                │
-      · al-17 Review of al-1│ Mark ready      R                                │
-    · al-13 Docs            │ Block…          b                                │
-── message ─────────────────│ Cancel…         x                                │
- to: al-13 ▾  info ▾  m: mes│ Resume          u                                │
+      +1 earlier            │ Push…           P                                │
+      · al-17 Review of al-1│ Reopen…         O      — select a done task      │
+    · al-13 Docs            │ Edit…           e                                │
+── message ─────────────────│ Mark ready      R                                │
+ to: al-13 ▾  info ▾  m: mes│ Block…          b                                │
 [q] quit  [?] help  [!] need╰──────────────────────────────────────────────────╯

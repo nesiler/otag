@@ -7,13 +7,13 @@
   │ Deliver al-9                                                             │1%
   │                                                                          │2h
   │ task al-9 Add CSV export (done)                                          │2m
-  │ branch otag/al-9                                                         │1%
+  │ branch feature/al-9                                                      │1%
   │ worktree (none recorded)                                                 │
   │ The worktree will be removed; the branch is kept.                        │0s
   │                                                                          │3h
   │ Note:                                                                    │6h
 ▾ │ [ ] delete the branch if it is merged                                    │dy
-  │ [ ] force: remove worktrees with uncommitted changes (they are lost)     │0m
+  │ [ ] force: lose uncommitted changes; delete the branch even if unmerged  │0m
   │                                                                          │
   │ [ Deliver ]  [ Cancel ]                                                  │
   ╰──────────────────────────────────────────────────────────────────────────╯

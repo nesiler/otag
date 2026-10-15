@@ -52,6 +52,8 @@ const (
 	actReview
 	actDeliver
 	actAckAll
+	actPush   // otag task push: the task branch to the project's remote
+	actReopen // otag task reopen: a done task back to ready, with a reason
 	// Polish (T4).
 	actMenu        // the context menu of the row, tab or item
 	actFilter      // type a tree filter
@@ -146,6 +148,8 @@ var bindings = []binding{
 	bind(scopeAct, actCoord, 0, "", "c", "the project's coordinator: attach if live, else start…", "c"),
 	bind(scopeAct, actReview, 0, "", "v D", "review…, deliver…", "v"),
 	bind(scopeAct, actDeliver, 0, "", "", "", "D"),
+	bind(scopeAct, actPush, 0, "", "P O", "push the task branch…, reopen a done task…", "P"),
+	bind(scopeAct, actReopen, 0, "", "", "", "O"),
 	bind(scopeAct, actAckAll, 0, "", "A", "acknowledge every notification…", "A"),
 	bind(scopeAct, actMenu, 0, "", "o", "context menu of the row, item or tab (right-click; also shift+F10, menu)", "o", "shift+f10", "menu"),
 	bind(scopeAct, actCopy, 0, "", "y", "copy the id, or a run's attach command", "y"),

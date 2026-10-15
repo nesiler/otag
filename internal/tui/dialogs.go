@@ -472,19 +472,22 @@ func (m *Model) reviewDialog(t *task.Task) *dialog {
 // deliverDialog: task deliver ID [--note N] [--delete-branch] [--force]; "delete branch
 // if merged" starts unchecked, and force asks a second time.
 func (m *Model) deliverDialog(t *task.Task) *dialog {
-	branch, wt := "otag/"+t.ID, "(none recorded)"
+	branch, wt := t.Branch, "(none recorded)"
 	if r := m.taskRun(t.ID, t.CurrentRunID); r != nil && r.Workspace != nil {
-		if r.Workspace.Branch != "" {
+		if branch == "" {
 			branch = r.Workspace.Branch
 		}
 		wt = r.Workspace.Path + " (" + r.Workspace.Mode + ")"
+	}
+	if branch == "" {
+		branch = "(none)"
 	}
 	about := fmt.Sprintf("task %s %s (%s)\nbranch %s\nworktree %s\nThe worktree will be removed; the branch is kept.",
 		t.ID, t.Title, t.Status, branch, wt)
 	buttons := []form.Button{{ID: "deliver", Label: "Deliver"}, cancelButton}
 	f := form.New("Deliver "+t.ID, buttons, note("", about, 0), text("note", "Note", "", false),
 		check("delete", "delete the branch if it is merged"),
-		check("force", "force: remove worktrees with uncommitted changes (they are lost)"))
+		check("force", "force: lose uncommitted changes; delete the branch even if unmerged"))
 	d := &dialog{form: f, project: t.Project}
 	d.submit = func(button string) ([]string, error) {
 		switch {
@@ -514,6 +517,76 @@ func (m *Model) deliverDialog(t *task.Task) *dialog {
 	}
 	d.then = func(o Outcome) tea.Cmd { return m.open(m.resultDialog("Delivered "+t.ID, o.Human)) }
 	return d
+}
+
+// pushDialog: task push ID [--force]; force asks a second time, like deliver's.
+func (m *Model) pushDialog(t *task.Task) *dialog {
+	last := "never pushed by otag"
+	if p := t.Push; p != nil {
+		last = fmt.Sprintf("%s to %s/%s at %s", shortSHA(p.SHA), p.Remote, p.Branch, p.At)
+	}
+	about := fmt.Sprintf("task %s %s (%s)\nbranch %s\nlast push: %s\nPushes the branch's commits to the project's remote "+
+		"(the same branch name); uncommitted changes stay behind.", t.ID, t.Title, t.Status, t.Branch, last)
+	buttons := []form.Button{{ID: "push", Label: "Push"}, cancelButton}
+	f := form.New("Push "+t.ID, buttons, note("", about, 0),
+		check("force", "force: overwrite the remote branch (--force-with-lease against otag's last push)"))
+	d := &dialog{form: f, project: t.Project}
+	d.submit = func(button string) ([]string, error) {
+		switch {
+		case button == "back":
+			f.Buttons, f.Status = buttons, ""
+			f.FocusField("force")
+			return nil, errStay
+		case f.Get("force") != "" && button != "force":
+			f.Buttons = []form.Button{{ID: "back", Label: "Back"}, {ID: "force", Label: "Push with force"}}
+			f.Status = "force replaces the remote branch's history (only while it is where otag last pushed it). Sure?"
+			f.FocusButton("back")
+			return nil, errStay
+		}
+		args := []string{"task", "push", t.ID}
+		if button == "force" {
+			args = append(args, "--force")
+		}
+		return args, nil
+	}
+	d.then = func(o Outcome) tea.Cmd { return m.open(m.resultDialog("Pushed "+t.ID, o.Human)) }
+	return d
+}
+
+// reopenDialog: task reopen ID --version V -- reason. The reason is required: the
+// task's next run gets it.
+func (m *Model) reopenDialog(t *task.Task) *dialog {
+	branch := "the same branch"
+	if t.Branch != "" {
+		branch = t.Branch
+	}
+	about := fmt.Sprintf("task %s %s (%s)\nThe task goes back to ready on %s; its next run gets the reason. "+
+		"An accepted review no longer counts: it is reviewed again when it is done.", t.ID, t.Title, t.Status, branch)
+	f := form.New("Reopen task "+t.ID+"?", []form.Button{{ID: "reopen", Label: "Reopen"}, cancelButton},
+		note("", about, 0), area("reason", "Reason (review feedback, CI failure, ...)", "", 3, true))
+	version, id := t.Version, t.ID
+	d := &dialog{form: f, project: t.Project}
+	d.submit = func(string) ([]string, error) {
+		reason := strings.TrimSpace(f.Get("reason"))
+		if reason == "" {
+			f.FocusField("reason")
+			return nil, errors.New("a reopen needs a reason")
+		}
+		return []string{"task", "reopen", id, "--version", strconv.FormatInt(version, 10), "--", reason}, nil
+	}
+	d.refresh = func() {
+		if cur := m.findTask(id); cur != nil {
+			version = cur.Version
+		}
+	}
+	return d
+}
+
+func shortSHA(s string) string {
+	if len(s) > 10 {
+		return s[:10]
+	}
+	return s
 }
 
 // confirmDialog runs args (with --project project, when not "") after a yes.

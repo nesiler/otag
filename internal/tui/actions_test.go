@@ -336,7 +336,7 @@ func TestDeliverDialog(t *testing.T) {
 	h.selectRow("t:al-9")
 	h.key("D")
 	f := h.m.dlg.form
-	if f.Field("delete").On || f.Field("force").On || !strings.Contains(f.Fields[0].Text, "branch otag/al-9") {
+	if f.Field("delete").On || f.Field("force").On || !strings.Contains(f.Fields[0].Text, "branch feature/al-9") {
 		t.Fatalf("defaults: %+v %q", f.Fields, f.Fields[0].Text)
 	}
 	h.key("ctrl+s")
@@ -798,5 +798,53 @@ func TestNoWritesInTUI(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+// Push (P): a plain push, or --force after a second confirmation of its own; reopen
+// (O): only a done task, with a required reason, at the task's version.
+func TestPushAndReopenDialogs(t *testing.T) {
+	h := newHarness(t, 120, 40)
+	h.selectRow("t:al-9")
+	h.key("P")
+	f := h.m.dlg.form
+	if f.Field("force").On || !strings.Contains(f.Fields[0].Text, "branch feature/al-9") ||
+		!strings.Contains(f.Fields[0].Text, "never pushed by otag") {
+		t.Fatalf("push defaults: %q", f.Fields[0].Text)
+	}
+	h.key("ctrl+s")
+	h.wantCall("--project", "alpha", "task", "push", "al-9")
+	if h.m.dlg == nil || h.m.dlg.form.Title != "Pushed al-9" {
+		t.Fatalf("push result %+v", h.m.dlg)
+	}
+	h.key("esc")
+	h.key("P", "space") // force
+	f = h.m.dlg.form
+	h.key("ctrl+s")
+	if len(h.calls) != 1 || f.Buttons[1].ID != "force" {
+		t.Fatalf("no second confirm for force: %v %+v", h.calls, f.Buttons)
+	}
+	x, y := h.dialogPart("", "force", -1)
+	h.click(x, y)
+	h.wantCall("--project", "alpha", "task", "push", "al-9", "--force")
+	h.key("esc")
+
+	h.key("O")
+	f = h.m.dlg.form
+	h.key("ctrl+s")
+	if len(h.calls) != 2 || !strings.Contains(f.Status+f.Err, "reason") {
+		t.Fatalf("reopen without a reason: %v %q %q", h.calls, f.Status, f.Err)
+	}
+	h.typeText("CI is red")
+	h.key("ctrl+s")
+	h.wantCall("--project", "alpha", "task", "reopen", "al-9", "--version", "0", "--", "CI is red")
+
+	// Not done: no reopen dialog; no branch: no push dialog.
+	h.selectRow("t:al-15")
+	n := len(h.calls)
+	h.key("O")
+	h.key("P")
+	if h.m.dlg != nil || len(h.calls) != n {
+		t.Fatalf("dialogs for a draft task: %+v", h.m.dlg)
 	}
 }

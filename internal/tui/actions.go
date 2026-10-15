@@ -441,6 +441,16 @@ func (m *Model) action(act action) tea.Cmd {
 			return need("a done task")
 		}
 		return m.open(m.deliverDialog(t))
+	case actPush:
+		if s.task == nil || s.task.Branch == "" {
+			return need("a task with a branch")
+		}
+		return m.open(m.pushDialog(s.task))
+	case actReopen:
+		if s.task == nil || s.task.Status != task.Done {
+			return need("a done task")
+		}
+		return m.open(m.reopenDialog(s.task))
 	case actAckAll:
 		return m.open(m.confirmDialog("Acknowledge every notification?", fmt.Sprintf("%d unread notification(s) "+
 			"are marked read (otag notify ack --all).", m.snap.Unread), "Ack all", "", []string{"notify", "ack", "--all"}))

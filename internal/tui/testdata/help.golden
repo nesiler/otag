@@ -35,6 +35,6 @@
                      │   R b          mark ready (also unblocks), block…                          │
                      │   s S p u      start a run…, stop…, park…, resume                          │
                      │   m r          message box to the selection; reply to its open question    │
-── message ──────────│ ↑↓ pgup pgdn scroll · lines 1-35 of 65                                     │─────────────────────
+── message ──────────│ ↑↓ pgup pgdn scroll · lines 1-35 of 66                                     │─────────────────────
  to: coord ▾  info ▾ ╰────────────────────────────────────────────────────────────────────────────╯               [Send]
 [q] quit  [?] help  [!] needs  [tab] focus  [.] closed  [n] new  [s] start  [S] stop  [m] message  [r] reply  [i] type

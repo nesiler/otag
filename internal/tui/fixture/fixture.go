@@ -32,8 +32,12 @@ func str(s string) *string { return &s }
 //	beta (light): be-1 ready; be-2 delivered (closed, with ShowClosed).
 func Snapshot(showClosed bool) *data.Snapshot {
 	tk := func(id, project, title, status string, prio int, changed time.Duration, current string) task.Task {
-		return task.Task{ID: id, Project: project, Title: title, Status: status, Priority: prio,
+		t := task.Task{ID: id, Project: project, Title: title, Status: status, Priority: prio,
 			StatusChangedAt: ago(changed), CurrentRunID: current}
+		if project == "alpha" && status != task.Draft {
+			t.Branch = "feature/" + id // alpha works in worktrees
+		}
+		return t
 	}
 	rn := func(id, project, taskID, role, status string, attempt int, started time.Duration, pane string) run.Run {
 		r := run.Run{ID: id, Project: project, TaskID: taskID, Role: role, Status: status, Attempt: attempt,

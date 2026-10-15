@@ -43,6 +43,7 @@
            │   i            typing mode: keys go to the agent (C-q / M-q leaves)        │
            │   c            the project's coordinator: attach if live, else start…      │
            │   v D          review…, deliver…                                           │
+           │   P O          push the task branch…, reopen a done task…                  │
            │   A            acknowledge every notification…                             │
            │   o            context menu of the row, item or tab (right-click; also     │
            │                shift+F10, menu)                                            │
@@ -71,7 +72,6 @@
            │   Meta). Inside your own tmux it opens as a popup. set -g @otag_ui off (in │
            │   otag's tmux.conf) keeps otag's bindings and status bar off its server.   │
            ╰────────────────────────────────────────────────────────────────────────────╯
-                                      │
                                       │
                                       │
                                       │

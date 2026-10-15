@@ -195,11 +195,11 @@ func TestE2EReviewDeliver(t *testing.T) {
 	o.selectTask("Deliver me", del)
 	o.keys("D")
 	s, _ := o.waitFor("the deliver dialog", 5*time.Second, contains("Deliver "+del, "[ ] delete the branch if it is merged"))
-	if !strings.Contains(s, "branch otag/"+del) {
+	if !strings.Contains(s, "branch feature/"+del) {
 		t.Errorf("no branch in the dialog:\n%s", s)
 	}
 	o.keys("C-s")
-	o.waitFor("the result", 15*time.Second, contains("Delivered "+del, "delivered "+del, ": removed", "branch otag/"+del+": kept"))
+	o.waitFor("the result", 15*time.Second, contains("Delivered "+del, "delivered "+del, ": removed", "branch feature/"+del+": kept"))
 	e.WaitTask(del, func(s string) bool { return s == "delivered" })
 	if _, err := os.Stat(worktree); !os.IsNotExist(err) {
 		t.Fatalf("worktree still there: %v", err)

@@ -18,6 +18,8 @@
                       │ Reply           r      — no open question here   │
                       │ Review…         v      — select a task in review │
                       │ Deliver…        D                                │
+                      │ Push…           P                                │
+                      │ Reopen…         O      — select a done task      │
                       │ Edit…           e                                │
                       │ Mark ready      R                                │
                       │ Block…          b                                │
@@ -26,8 +28,6 @@
                       │ Details         2                                │
                       │ Copy id         y                                │
                       ╰──────────────────────────────────────────────────╯
-                                             │
-                                             │
                                              │
                                              │
                                              │

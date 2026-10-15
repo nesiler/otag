@@ -101,7 +101,7 @@ func (m *Model) openMenu(build func() []menuItem, x, y int) {
 func (m *Model) actWhy(act action) string {
 	switch act {
 	case actNew, actEdit, actCancel, actReady, actBlock, actStart, actStop, actPark, actResume, actCoord, actReply,
-		actMessage, actReview, actDeliver, actAckAll, actSync, actAddProject:
+		actMessage, actReview, actDeliver, actAckAll, actSync, actAddProject, actPush, actReopen:
 		if why := m.cannotAct(); why != "" {
 			return why
 		}
@@ -111,7 +111,7 @@ func (m *Model) actWhy(act action) string {
 	}
 	switch act {
 	case actNew, actCoord, actEdit, actCancel, actReady, actBlock, actStart, actStop, actPark, actResume, actReply,
-		actReview, actDeliver, actType, actEnter:
+		actReview, actDeliver, actType, actEnter, actPush, actReopen:
 	default:
 		return ""
 	}
@@ -152,6 +152,14 @@ func (m *Model) actWhy(act action) string {
 		}
 	case actDeliver:
 		if s.task == nil && (s.row == nil || s.row.Kind != tree.Deliver) {
+			return "select a done task"
+		}
+	case actPush:
+		if s.task == nil || s.task.Branch == "" {
+			return "select a task that has a branch (it gets one with its first run)"
+		}
+	case actReopen:
+		if s.task == nil || s.task.Status != task.Done {
 			return "select a done task"
 		}
 	case actType, actEnter:
@@ -199,7 +207,8 @@ func (m *Model) rowMenu() []menuItem {
 		return []menuItem{it("Deliver…", actDeliver), it(toggle, actToggle), details}
 	case tree.Task:
 		return []menuItem{it("Start run…", actStart), it("Attach", actEnter), it("Type into pane", actType), it("Message task", actMessage),
-			it("Reply", actReply), it("Review…", actReview), it("Deliver…", actDeliver), it("Edit…", actEdit),
+			it("Reply", actReply), it("Review…", actReview), it("Deliver…", actDeliver), it("Push…", actPush),
+			it("Reopen…", actReopen), it("Edit…", actEdit),
 			it("Mark ready", actReady), it("Block…", actBlock), it("Cancel…", actCancel), it("Resume", actResume),
 			details, it("Copy id", actCopy)}
 	case tree.Run, tree.Coord:
