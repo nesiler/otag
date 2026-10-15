@@ -108,7 +108,9 @@ func Recover(dir string) ([]string, error) {
 	for _, d := range []string{dir, filepath.Join(dir, "projects")} {
 		tmps, _ := filepath.Glob(filepath.Join(d, ".*"+tempMark+"*"))
 		for _, t := range tmps {
-			_ = os.Remove(t)
+			if isTemp(filepath.Base(t)) {
+				_ = os.Remove(t)
+			}
 		}
 	}
 	if len(both) > 0 {
@@ -116,6 +118,26 @@ func Recover(dir string) ([]string, error) {
 			"under the second name and delete the other; otag changes the config again only then", strings.Join(both, "; "))
 	}
 	return notes, nil
+}
+
+// isTemp reports whether name is exactly a temporary file of writeNew: ".<file>.toml" + tempMark +
+// os.CreateTemp's random digits. A project may legally contain tempMark in its name, so a
+// leftover moved aside (".<name>.toml.otag-removing") must never match.
+func isTemp(name string) bool {
+	i := strings.LastIndex(name, tempMark)
+	if i < 0 || !strings.HasPrefix(name, ".") || !strings.HasSuffix(name[:i], ".toml") {
+		return false
+	}
+	digits := name[i+len(tempMark):]
+	if digits == "" {
+		return false
+	}
+	for _, c := range digits {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // errLeftover is the refusal when a file to move aside already has a leftover.
