@@ -19,10 +19,12 @@ worktrees inside a private tmux server; you watch and steer everything from one 
 - **Tasks and runs.** A task is a unit of work with a status machine (draft, ready, running, waiting, review,
   done, delivered). Every attempt is a run. When a run hits a quota limit or fails to launch, the daemon starts a
   new run with the profile's fallback; crashed or stalled runs fall back too if you add them to `fallback_on`.
-- **Isolation.** One git worktree and branch (`otag/<task>`) per task. otag never writes into your project's
-  working tree.
+- **Isolation.** One git worktree and branch per task (`feature/<task>` by default; set `branch_prefix`), started
+  from the project's `base` (for example `origin/dev`, fetched first) or its current HEAD. otag never writes into
+  your project's working tree.
 - **Review flow.** A finished task can spawn a linked review task, ideally on a different model; the reviewer
-  accepts or rejects.
+  inspects the reviewed commit in a detached checkout and accepts or rejects. `--review <profile|none>` overrides
+  the project's reviewer per task.
 - **Messaging with proven delivery.** Agents and humans exchange questions, replies and commands (`otag send`,
   `otag ask`, `otag inbox`, `otag reply`). A child can park itself while waiting for an answer and is resumed when
   the reply arrives.
@@ -33,6 +35,9 @@ worktrees inside a private tmux server; you watch and steer everything from one 
 - **Quota tracking.** Per-account quota windows, cooldowns and profile fallback (`otag quota`).
 - **Delivery.** otag never merges. A done task is "ready to deliver"; each project delivers its own way (the
   coordinator, a delivery agent, or you), then `otag task deliver` marks it delivered and removes the worktree.
+- **Merge/pull request flow.** Mechanisms, not a workflow: `otag task push` pushes a task branch when the project's
+  `push` setting allows it, the coordinator opens the MR/PR with `glab` or `gh`, and `otag task reopen` sends a
+  done task back to work (review feedback, red CI) on the same branch with the reason.
 - **Terminal UI.** `otag tui` is mouse-driven with a live pane preview, a typing mode that forwards keys to the
   agent, and full-screen attach.
 
@@ -131,12 +136,14 @@ wizard (several logins of one agent, custom model ids, strict guard, environment
 | Review | A separate task linked with `review_of`; recorded with `otag review --accept` / `--reject`. |
 | Guard | Hook-based blocking of dangerous actions, `light` or `strict`. |
 | Delivery | Getting a done task's result into the project, done by the project; `otag task deliver` records it. |
+| Branch | A task's branch, `<branch_prefix><task>` (default `feature/`), kept for the task's life once created. |
+| Push / reopen | `otag task push` (who may: the project's `push` setting) and `otag task reopen` (done back to ready, with a reason): the MR/PR flow primitives. |
 
 ## Documentation
 
 - [Setup](docs/SETUP.md): the first-run wizard, `otag init`, projects, the generated files
 - [Design](docs/DESIGN.md): goals, data model, decisions
-- [Daemon](docs/DAEMON.md): watchdogs, fallback, park and resume, review, delivery
+- [Daemon](docs/DAEMON.md): watchdogs, fallback, park and resume, review, delivery, the MR/PR flow
 - [Adapters](docs/ADAPTERS.md): Claude Code, Codex and OpenCode integration, threat model
 - [Messages](docs/MESSAGES.md): messaging and delivery proof
 - [Quota](docs/QUOTA.md): quota collectors and cooldowns

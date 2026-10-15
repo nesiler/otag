@@ -42,7 +42,11 @@ written before the last one):
    "worktree"`, `guard = "light"`, `deny = [".env*", "*.pem"]`, the coordinator
    (`claude-opus`), the default profile (`claude-sonnet`) and a review profile on another
    agent when there is one. The coordinator runs on Claude Code only; without a Claude
-   profile there is no coordinator, but tasks still run on the other agents.
+   profile there is no coordinator, but tasks still run on the other agents. The same
+   page asks for the branch settings: the task branch prefix (`feature/`), the base new
+   task branches start from (blank: the checkout's HEAD; the repository's remote default
+   branch, such as `origin/main`, is shown as the suggestion) and who may push task
+   branches (`coordinator`). See "Branches, base and push" below.
 5. **Background service.** Installs the daemon (a launchd agent,
    `io.github.nesiler.otag`; on by default), the same as `otag daemon install`.
 6. **Agent skill.** Installs the otag skill for Claude Code, Codex and OpenCode, the same
@@ -123,7 +127,8 @@ changes nothing.
 ## Projects
 
 ```sh
-otag project add [path] [--name N] [--prefix P] [--guard light|strict] [--workspace worktree|same] [--yes]
+otag project add [path] [--name N] [--prefix P] [--guard light|strict] [--workspace worktree|same]
+                 [--branch-prefix B] [--base REF] [--push none|coordinator|child] [--remote R] [--yes]
 otag project list
 otag project remove <name>
 ```
@@ -159,7 +164,25 @@ Account keys: `harness` (claude | codex | opencode), `config_dir`, `command`, `e
 `quota`. Profile keys: `account`, `model`, `effort`, `mode` (interactive | headless),
 `tags`, `fallback`, `env`, `env_passthrough`, `args`, `description`. Project keys:
 `path`, `prefix`, `coordinator_profile`, `default_profile`, `review_profile`,
-`workspace`, `guard`, `deny` (and any extra key, stored as is).
+`workspace`, `guard`, `deny`, `branch_prefix`, `base`, `remote`, `push` (and any extra
+key, stored as is).
+
+### Branches, base and push
+
+All four are optional; a project without them works as before, except that new task
+branches are named `feature/<task>` (it was `otag/<task>`).
+
+| Key | Default | Meaning |
+|---|---|---|
+| `branch_prefix` | `"feature/"` | A task's branch is `<branch_prefix><task>`, the same name locally and on the remote. `""` is the task id alone. It must make a valid branch name (`git check-ref-format`). A task keeps the branch it got when its worktree was first created, so changing the prefix only affects new tasks (existing ones keep `otag/<task>`). |
+| `base` | unset: the checkout's HEAD | The ref new task branches start from. A remote-tracking ref (`origin/dev`, where `origin` is a configured remote) is fetched first (`git fetch origin dev`); a failed fetch fails the run's start with the error (otag never falls back to a stale ref). A local branch or a commit is used as it is and must exist. `otag task add/edit --base` overrides it for one task until its worktree exists. |
+| `remote` | the remote of `base` when `base` is a remote-tracking ref, else `origin` | Where `otag task push` pushes. |
+| `push` | `"coordinator"` | Who may run `otag task push`: `none` (nobody; otag never pushes), `coordinator` (the project's coordinator and you), `child` (also the task's own child run). An agent's own `git push` stays refused by the guard in every case. |
+
+With `push = "child"` the push runs inside the child's sandbox: a strict-guard run of a
+harness whose sandbox has no network or protects the remote-tracking refs (Codex's,
+Claude Code's) may not be able to push. It is meant for light-guard projects; otherwise
+let the coordinator push.
 
 ## Manual configuration
 

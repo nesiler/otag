@@ -59,10 +59,15 @@ use the shared `internal/guard` package (below).
    `queued` with `id = <task>-r<attempt>`, `retry_of_run_id` = previous run of the task, and
    point `tasks.current_run_id` at it.
 2. **Workspace**: mode `worktree` → `git worktree add` at
-   `<data>/worktrees/<project>/<task>` on branch `otag/<task>` from the project's HEAD; an
-   existing path is reused only if it is the root of a linked worktree of the project on that
-   branch; a deleted directory is recreated from the surviving branch. Whenever the branch
+   `<data>/worktrees/<project>/<task>` on the task's branch: its stored `tasks.branch`, else
+   `<branch_prefix><task>` (stored then), from the task's or the project's `base` (a
+   remote-tracking base is fetched first; a failed fetch fails the start) or the project's
+   HEAD; an existing path is reused only if it is the root of a linked worktree of the
+   project on that branch; a deleted directory is recreated from the surviving branch, and a
+   branch that exists but was never the task's is refused. Whenever the branch
    already existed, the task's first recorded `base_sha` is kept (else `git merge-base`).
+   A review run gets a detached worktree at the reviewed head instead (`git worktree add
+   --detach`, no branch; DAEMON.md "Review").
    Mode `same` → the project directory. The `workspaces` row is written right away.
    `<data>` is `$OTAG_DATA_DIR`, else the directory of `$OTAG_DB`, else `~/.local/share/otag`;
    all otag paths are made absolute once and passed to children as such.
@@ -109,7 +114,7 @@ kills the windows already started, ends the run with `launch_failed` (error text
 | `Harness`, `Account{Name, ConfigDir, Command, Env}` | frozen from the profile revision; `ConfigDir` is e.g. `~/.claude-work` → set `CLAUDE_CONFIG_DIR`; `Command` is the binary/wrapper (`""` = harness default, e.g. `claude`) |
 | `Profile{Name, Model, Effort, Mode, Env, Args, RevisionID, ConfigHash}` | frozen profile; `Args` are extra harness arguments, `Mode` is `interactive\|headless` |
 | `Workdir` | agent cwd (worktree or project dir) |
-| `ProjectPath`, `Branch` | the repository; `otag/<task>` or `""` in same mode |
+| `ProjectPath`, `Branch` | the repository; the task branch (`<branch_prefix><task>`, or the one the task stored), `""` in same mode and in a review run's detached worktree |
 | `RunDir` | private dir for this run's files (settings, plugin dir, prompt files) |
 | `CacheDir` | per-harness cache shared by runs (e.g. Codex hook trust hashes) |
 | `OtagBin` | absolute path of otag; **use it in hook commands** |
@@ -212,8 +217,10 @@ codex -c 'hooks.Stop=[{hooks=[{type="command",command="/abs/otag event codex sto
 
 `otag prime [--json]` prints a short orientation (under 60 lines) for whoever calls it,
 chosen by verified context (`run.BuildPrime`): a child run (identity, task and body,
-the last review rejection, rules, the commands open to it, unread messages), a review
-run (what to review, `otag review <task> --accept|--reject`), a coordinator run
+the last review rejection or reopen reason, rules, the commands open to it (with `otag
+task push <task>` when the project has `push = "child"`), unread messages), a review
+run (what to review, in its detached checkout of the reviewed head; `otag review <task>
+--accept|--reject`), a coordinator run
 (coordinator commands, task counts, live runs, needs) or, outside any run, the project
 found from the working directory (summary and how to coordinate) or the list of
 registered projects. Unread messages are listed by id and headline and never marked
@@ -362,7 +369,9 @@ so a session can be resumed later (`ResumeSessionID`, phase 4). `otag done` run 
 from inside its own pane survives long enough to commit and print (it ignores SIGHUP).
 On `done` with a review profile, otag creates the review task: `Review: <title>`, status
 `ready`, profile = the project's review profile, a `review_of` edge to the reviewed task, and
-a body with branch, base/head commits, workspace path and the agent's summary.
+a body with branch, base/head commits, the diff command (`git diff <base>...<head>`),
+workspace path and the agent's summary. The task's `--review <profile|none>` overrides the
+project's review profile (none: no review task, the task is done).
 
 Every kill (`stop`, `done`, `fail`, launch cleanup) checks that the pane still runs the pid
 recorded for it, so a pane id reused after a tmux server restart is never killed.
@@ -417,7 +426,7 @@ brew, tools that read env vars); strict is the full phase-3.5 behavior below.
 
 | | light (default) | strict |
 |---|---|---|
-| `git push` in every form the guard detects (options, path, `git-push`, `sh -c`, `$(...)`, force variants) | denied | denied |
+| `git push` in every form the guard detects (options, path, `git-push`, `sh -c`, `$(...)`, force variants); the denial points to `otag task push`, otag's own push where the project's `push` setting allows it | denied | denied |
 | other refs and checkouts: `update-ref`, `branch -f/-d/-D/-m/-M/-C` and `checkout -B`/`switch -C` on another branch, `worktree remove/prune/move`, `-C`/`--git-dir`/`--work-tree`/`GIT_DIR=` outside the workspace | denied | denied |
 | `reset`, `checkout`, `switch`, `restore`, `clean`, `stash`, `commit`, `merge`, `rebase`, `rm`, `mv`, `add`, `apply`, ... run (after a `cd` or `env -C`) in another checkout | denied | sandbox |
 | file-tool writes (Write/Edit/MultiEdit/NotebookEdit, `apply_patch`, OpenCode write/edit, MCP tools named like writers) outside the workspace | denied; temp dirs allowed | denied |
@@ -432,6 +441,22 @@ brew, tools that read env vars); strict is the full phase-3.5 behavior below.
 `rm -r` of a path whose last component is a symlink checks the link itself, not its
 target (rm removes the link). At both levels a `cd` inside `( )`, `$( )` or `<( )` does
 not move the commands after it.
+
+**Detached review worktrees (both levels).** A review run's worktree is a detached
+checkout of the reviewed head, so the run has no own branch (`Branch = ""`): every
+branch move, rename, delete and `checkout -B`/`switch -C`, `update-ref` and push is
+refused; reading, building, testing and commits on the detached HEAD are not. Claude
+keeps the `.git` pointer and every branch ref denied in its sandbox (as in any linked
+worktree); Codex's `permissions.otag` makes only `objects` writable in the common git
+dir (no ref). otag does not dictate what the reviewer does in the checkout.
+
+**`otag task push` (not an agent's git push).** `otag task push <task>` is a child command
+in the guard's list, so a child's shell may run it; the CLI then applies the project's
+`push` setting (only `push = "child"` lets the task's own child push, never a review
+run). otag runs the push itself with its push backstop (below) left out of its git
+environment. In a strict run the push still runs inside the harness sandbox, which may
+have no network or deny the remote-tracking ref update; `push = "child"` is meant for
+light-guard projects.
 
 **Push backstop (both levels).** With git ≥ 2.31 the run's windows get two git config
 entries through `GIT_CONFIG_COUNT`/`KEY_n`/`VALUE_n`, appended after any slots the

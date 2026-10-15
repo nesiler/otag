@@ -363,6 +363,7 @@ buttons and the `?` overlay.
 | `c` | coordinator: attach if live, else start (profile picker) | menu on a project | T2 / T3 |
 | `r` | reply to the open question of the selected task or run (message box in reply mode) | Needs: "Reply" | T2 |
 | `v` / `D` | review… (on a review task: the task it reviews) / deliver… (on the "⇪" group: its first task) | menu, "⇪" group | T2 |
+| `P` / `O` | push the task branch… (a task with a branch) / reopen a done task… (reason required) | menu | MR flow |
 | `A` | acknowledge every notification (confirm) | Inbox: [Ack all] | T2 |
 | `y` | copy id / attach command (OSC 52, `tea.SetClipboard`); on Needs, Inbox the item's id | menu | T4 |
 | `E` | expand every row of the selected project | menu "Expand all" | T4 |
@@ -572,7 +573,9 @@ the dialog (code + message) and the form stays open.
 | Stop / Park | reason; [Stop] [Park] (with an open ask of this run) [Cancel] | `run stop RUN --reason R` / `run stop RUN --park` |
 | Reply | the question (read-only), answer | `reply ID -- text` |
 | Review | task, reviewed run and profile, branch; [Accept] (note) [Reject] (reason required) | `review TASK --accept [note]` / `--reject reason` |
-| Deliver | task, branch `otag/<id>`, worktree, "worktree will be removed; branch kept"; note; ☐ delete branch if merged (unchecked); ☐ force (needs a second confirm) | `task deliver ID --note N [--delete-branch] [--force]` |
+| Deliver | task, its stored branch, worktree, "worktree will be removed; branch kept"; note; ☐ delete branch if merged (unchecked); ☐ force: lose uncommitted changes, delete the branch even if unmerged (needs a second confirm) | `task deliver ID --note N [--delete-branch] [--force]` |
+| Push | task, branch, last push (commit, remote/branch, time) or "never pushed by otag"; ☐ force (`--force-with-lease`; needs a second confirm, like Deliver's) | `task push ID [--force]`; the output in a result dialog |
+| Reopen | task, "back to ready on <branch>; an accepted review no longer counts"; reason (required) | `task reopen ID --version V -- reason` |
 | Confirm / Result | yes/no; `Outcome.Human` in a viewport | — |
 
 Context menu (right-click, or `o` / `shift+F10` / `menu`; T4), each item with its key and,
@@ -591,7 +594,8 @@ replaces the menu's row or Needs / Inbox item; one that only changes availabilit
 - **Project**: New task…, Coordinator (attach / start…), Message the coordinator, Expand
   all, Expand/Collapse, Show/Hide closed tasks, Details, Stats, Sync registry, Filter….
 - **Task**: Start run…, Attach, Type into pane, Message task, Reply, Review…, Deliver…,
-  Edit…, Mark ready, Block…, Cancel…, Resume, Details, Copy id.
+  Push…, Reopen…, Edit…, Mark ready, Block…, Cancel…, Resume, Details, Copy id. Details
+  (`task show`) include the task's base, branch, review override and last push.
 - **Run, coordinator**: Attach, Type into pane, Message, Reply, Stop…, Park, Resume,
   Details, Copy attach command.
 - **Deliver group**: Deliver…, Expand/Collapse, Details. **"+N earlier"**: Show/Hide.

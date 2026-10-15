@@ -23,7 +23,8 @@ Success: (1) the state of every child is known at any moment; (2) automatic fall
 
 ## Task lifecycle
 `draft -> ready -> claimed -> running <-> waiting -> review -> done -> delivered`; any unfinished state can go to
-`blocked` / `cancelled`. `done` = ready to deliver; `delivered` only via `otag task deliver`.
+`blocked` / `cancelled`. `done` = ready to deliver; `delivered` only via `otag task deliver`. `otag task reopen`
+sends a done task back to `ready` (same branch, a reason for its next run; its accepted review goes stale).
 If a run ends early the task returns to `ready`. For the reasons in `fallback_on` (default: `quota`,
 `launch_failed`; `stalled` and `crashed` can be added) the daemon starts a new run with the fallback profile. A review is a separate
 task linked with `review_of` (ideally a different model).
@@ -57,7 +58,7 @@ Identity resolution: `--project/--run` -> `OTAG_PROJECT/OTAG_RUN_ID` -> cwd; an 
 `otag context`. `--json`: versioned envelope, stable error codes, `retryable`; stdout carries data, stderr
 diagnostics; no prompts in automation. Mutations take `--request-id` (idempotency); hook events carry `event_id`.
 
-- Human + coordinator: `status`, `task add|list [--deliverable]|show|edit|cancel|ready|claim|block|deliver`,
+- Human + coordinator: `status`, `task add|list [--deliverable]|show|edit|cancel|ready|claim|block|deliver|push|reopen`,
   `run start|list|show|stop|attach|resume`, `send`, `inbox`, `reply <msg-id>`, `review <task> --accept|--reject`.
 - Child: `task me`, `ask [--park]`, `done "summary"`, `fail "reason"`, `prime`.
 - Coordinator: `coord <project> [--profile P] [--attach]`, `run stop --park`, `needs`.
@@ -71,9 +72,12 @@ diagnostics; no prompts in automation. Mutations take `--request-id` (idempotenc
   run/pane (Claude `/clear` produces a new session_id).
 
 ## Isolation / security
-One git worktree + branch per task (or the same directory if the project asks for it). Guard: writes outside the
-worktree, push/`--force`, secret files, the project's deny list. A child commits and calls `otag done`; merging is
-up to the coordinator or a human.
+One git worktree + branch per task (or the same directory if the project asks for it); the branch is
+`<branch_prefix><task>` (default `feature/`), stored on the task when its worktree is created, and starts from the
+project's `base` (a remote-tracking base is fetched first) or its HEAD. A review run works in a detached worktree
+at the reviewed head. Guard: writes outside the worktree, push/`--force`, secret files, the project's deny list. A
+child commits and calls `otag done`; merging is up to the coordinator or a human. otag pushes a task branch itself
+only with `otag task push`, as the project's `push` setting allows (DAEMON.md "MR/PR flow").
 
 The threat model is **accidents**: it protects against a careless or confused agent, not a malicious agent trying to
 escape (details: ADAPTERS.md "Threat model").

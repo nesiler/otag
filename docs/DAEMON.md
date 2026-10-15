@@ -310,9 +310,20 @@ system note (the otag commands to coordinate with) instead of the child's. Messa
 ## Review (phase 4)
 
 A task that finishes in a project with a `review_profile` goes to `review` with a linked
-review task (`review_of`). That task's runs get `role = review`; their prompt says to
-inspect the branch read-only and finish with `otag review <task> --accept ["note"] |
---reject "reason"`. Finishing a review run, with `otag review` or `otag done`, never
+review task (`review_of`). A task's own `--review <profile|none>` (`otag task add/edit`,
+`tasks.review_profile_id` / `review_none`) overrides the project's: `none` finishes
+without a review, a profile reviews with that profile (one retired since falls back to
+the project's). That task's runs get `role = review`. In a worktree project the review
+run works in a **detached worktree at the reviewed head**: the commit the reviewed
+task's latest done run recorded (else the tip of its stored branch), checked out with
+`git worktree add --detach`, no branch created. The review task's body names the base,
+the head and the diff command (`git diff <base>...<head>`); its prompt says the same and
+to finish with `otag review <task> --accept ["note"] | --reject "reason"`. otag does not
+dictate what the reviewer does in the checkout (build, test, scratch commits on the
+detached HEAD); the guard refuses every ref move and push there (a detached checkout has
+no own branch), and the Codex sandbox writes only objects and the worktree's own HEAD. A
+review task created before review checkouts were detached keeps its own `otag/<task>`
+branch. Finishing a review run, with `otag review` or `otag done`, never
 creates another review. `otag review` (`run.Manager.Review`) writes, in one transaction,
 a `reviews` row linked to the reviewed task's latest `done` run (so to its profile:
 `v_profile_stats.reject_rate`) and to the reviewer run or actor, moves the reviewed task
@@ -322,6 +333,10 @@ review run completes that run through the same transaction-aware helper as `otag
 coordinator may review directly: unstarted review tasks are cancelled, one with a live
 run is a CONFLICT. `otag done` and `otag fail` close their task's open ask
 (`asker_done`, `asker_failed`); cancelling a task closes it as `cancelled`.
+
+A reopened task (`otag task reopen`, see "MR/PR flow") marks its accepted reviews stale
+(`reviews.stale_at`): they no longer satisfy the review gate and the done notice no
+longer quotes them; the task is reviewed again (a new review task) when it is done again.
 
 `otag stats` shows token usage per reported model (`v_model_usage`); per profile, runs,
 tokens, durations, reviews and the reject rate (`v_profile_stats`); and per project,
@@ -373,25 +388,34 @@ business, done by the coordinator, the project's own tooling or the human.
   5. Each worktree is removed with `git worktree remove` only if, with symlinks
      resolved, it is inside otag's worktree root of the project
      (`<data>/worktrees/<project>`) and `git worktree list` shows it as a linked worktree
-     on the task's branch `otag/<task>`. A path outside the root, the main checkout,
-     anything else that is not such a worktree, and a detached HEAD are refused (the
-     worktree `failed`; remove it by hand and run deliver again). A path that is another
+     on the branch it was created on (the task's stored branch, `tasks.branch`), or, for
+     a review task's detached checkout, still detached. A path outside the root, the
+     main checkout, anything else that is not such a worktree, and a task worktree with
+     a detached HEAD are refused (the worktree `failed`; remove it by hand and run
+     deliver again). A path that is another
      worktree of the repository now (another branch) is not the task's any more: it is
      left alone (`replaced`, with a warning). A path already gone is pruned, and an
      empty directory (what an interrupted removal leaves) deleted (`gone`). Every case
      but `failed` turns the path's `workspaces` rows `cleaned` with `cleaned_at` (event
      `task.worktree_removed`).
-  6. The branch stays. The default branch is the local branch `origin/HEAD` names, else
-     the branch the project checkout is on (a checkout on the task branch itself says
-     nothing about the merge). An unmerged task branch is a warning (`delivered
-     unmerged`), not an error. With `--delete-branch` a branch the default branch fully
+  6. The branch stays; it is the task's stored branch (`tasks.branch`, whatever the
+     project's `branch_prefix` says now). The default branch is the local branch
+     `origin/HEAD` names, else the branch the project checkout is on (a checkout on the
+     task branch itself says nothing about the merge). An unmerged task branch is a
+     warning (`delivered unmerged`), not an error. With `--delete-branch` a branch the default branch fully
      contains is deleted (`git branch -d` semantics against that branch): both commits
      are read once, the merge is checked on them, and the deletion is one `git update-ref
      --no-deref --stdin` transaction (`verify` the default branch at its commit, `delete`
      the task branch at its commit), so a branch or default branch that moved meanwhile
      keeps the branch. A symbolic task ref and a branch checked out in a worktree are
-     kept too (event `task.branch_deleted` on deletion). An unmerged
-     branch, or one whose worktree could not be removed, is kept with a warning.
+     kept too (event `task.branch_deleted` on deletion). An unmerged branch (unless
+     `--force`, below), or one whose worktree could not be removed, is kept with a warning.
+
+  With squash or rebase merges (GitLab, GitHub) the task branch is never an ancestor of
+  the target branch, so `--delete-branch` refuses it ("not merged"): use
+  `--delete-branch --force` (`git branch -D` semantics, still one ref transaction on the
+  commit read first; `--force` also removes dirty worktrees, see step 2) or delete the
+  branch by hand. The forge can delete the remote branch when it merges.
 
   The result is `{task, task_status, delivered_at, delivered, review_tasks,
   target_branch, worktrees: [{task, path, result: removed|gone|replaced|failed, error}],
@@ -403,6 +427,75 @@ business, done by the coordinator, the project's own tooling or the human.
   when it was delivered; `v_task_delivery` has one row per done or delivered task (no
   review tasks) with `wait_s`, NULL until delivered. `v_status_durations` has the same
   wait as the time spent in `done`.
+
+## MR/PR flow
+
+otag gives the merge/pull request flow its mechanisms and leaves the policy to the
+project: nothing here runs unless the project or the coordinator asks for it, and
+nothing is forge-specific (no GitLab/GitHub API, no CI integration; a forge adapter may
+come later). The project settings (`base`, `branch_prefix`, `remote`, `push`) are in
+[SETUP.md](SETUP.md) "Branches, base and push".
+
+- **Branches.** A task's branch is `<branch_prefix><task>` (default `feature/<task>`),
+  stored on the task (`tasks.branch`) when its worktree is first created and used from
+  then on: by later runs, the guard (its own branch), `otag task push`, delivery, the
+  TUI and `otag prime`. A task keeps it when the prefix changes; tasks from before v11
+  keep `otag/<task>`. A branch that already exists but was never the task's is refused
+  at start (rename or delete it, or change the prefix) rather than taken over.
+- **Base.** A new task branch starts from the task's `--base` (`otag task add/edit
+  --base <ref>`; refused once the task has its worktree: the branch already starts
+  there), else the project's `base`, else the checkout's HEAD. A remote-tracking base
+  (`origin/dev`) is fetched first: `git fetch <remote> +refs/heads/<branch>:refs/remotes/<remote>/<branch>`
+  in the project, outside any transaction. A failed fetch fails the start
+  (`launch_failed`, cause `workspace`; the task goes back to `ready`), never falling back
+  to a stale ref. The workspace records the ref and commit (`base_ref`, `base_sha`).
+- **`otag task push <task> [--force]`** (`run.Manager.PushTask`) pushes the task's
+  commit, `git push <remote> <sha>:refs/heads/<branch>` (the branch's commit read just
+  before, the same branch name on the remote, never another ref, no tags, no
+  submodules), with the project's hooks. Who may push is the project's `push`:
+  `coordinator` (default: the project's coordinator run, verified by its token, and the
+  human), `child` (also the task's own child run; not a review run, not another task's
+  child), `none` (nobody; `FORBIDDEN`). A run is never taken from `--run`, and a caller
+  with run residue (`OTAG_RUN_TOKEN` set, or a cwd inside otag's worktrees) is not the
+  human. The remote is the project's `remote`, else the remote of a remote-tracking base,
+  else `origin`. Uncommitted changes in the worktree are not pushed (a warning). A
+  rejected push (not a fast-forward) is `CONFLICT`. `--force` is `--force-with-lease`
+  against the commit otag recorded at its last push of that branch to that remote; when
+  otag never pushed it, only a remote without the branch is accepted (otag never
+  overwrites what it did not push). The push is recorded on the task (`push_remote`,
+  `push_branch`, `push_sha`, `pushed_at`; `otag task show`, the TUI's Details and the
+  done notice show it) with a `task.pushed` event, compare-and-swap on the previous
+  record: a concurrent push recorded meanwhile is a retryable `CONFLICT`. `--request-id`
+  replays an earlier identical push. Raw `git push` stays refused to every agent by the
+  guard (and git's own push block in run environments, which `otag task push` leaves out
+  of its own git).
+- **`otag task reopen <task> "reason"`** (`run.ReopenTask`), for the project's
+  coordinator and the human: `done → ready` in one transaction, same worktree and
+  branch. The reason becomes the status reason and is recorded on the `task.reopened`
+  event with the task's latest run; the next run's prior-attempt summary (or, for a task
+  that never ran, its prompt) and `otag prime` carry it, like a review rejection. Its
+  accepted reviews become stale (see "Review"), the queued deliveries of its done notice
+  expire and their notifications are acknowledged; when it is done again a new notice
+  is sent (`done:<task>:<n>`). A delivered task (`INVALID_TRANSITION`: add a follow-up
+  task), a review task (reopen the reviewed task), a task that is not done and one with
+  a run that has not ended are refused.
+
+A typical GitLab project (GitHub: `gh pr create` instead of `glab mr create`):
+
+```sh
+# projects/myapp.toml: base = "origin/dev", branch_prefix = "feature/", push = "coordinator"
+otag task add "Add CSV export" --body "..."        # the coordinator plans
+otag run start al-x3f --no-attach                   # child works on feature/al-x3f from the fetched origin/dev
+# ... the child commits and runs `otag done`; the review (if any) accepts; the task is done
+otag task push al-x3f                               # the coordinator pushes feature/al-x3f
+glab mr create --source-branch feature/al-x3f --target-branch dev --title "Add CSV export" --fill
+# CI is red or the MR review asks for changes:
+otag task reopen al-x3f "CI: lint fails in export.go; reviewer: rename the flag"
+otag run start al-x3f --no-attach                   # same branch; the run gets the reason
+otag task push al-x3f                               # updates the MR
+# merged on the forge (a squash merge):
+otag task deliver al-x3f --note "merged in !42" --delete-branch --force   # squash merged: -D
+```
 
 ## Usage limits: quota end and cooldown (hook side)
 
@@ -644,6 +737,13 @@ model when a harness reported none).
 Migration **v10** (`0010_delivery.sql`) rebuilds `tasks`: status `delivered` and
 `delivered_at` (CHECK: one iff the other). It recreates `ready_tasks` (a delivered
 blocker is finished) and adds the view `v_task_delivery` (see "Delivery").
+
+Migration **v11** (`0011_mr_flow.sql`, see "MR/PR flow") only adds columns: `projects.base`,
+`branch_prefix` (default `feature/`), `remote` and `push` (CHECK `none|coordinator|child`,
+default `coordinator`); `tasks.base`, `branch` (backfilled from each task's first
+worktree, so existing tasks keep `otag/<task>`), `review_profile_id` and `review_none`
+(CHECK: not both), and the push record `push_remote`, `push_branch`, `push_sha`,
+`pushed_at`; `reviews.stale_at`.
 
 
 ## Not in phase 3a

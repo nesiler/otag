@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Merge/pull request flow primitives (mechanisms only; the workflow stays the project's): see
+  [docs/DAEMON.md](docs/DAEMON.md) "MR/PR flow".
+- Project settings `base`, `branch_prefix`, `remote` and `push` (all optional). A remote-tracking `base`
+  (`origin/dev`) is fetched before a task branch is created; a failed fetch fails the run's start.
+- `otag task push <task> [--force]`: otag pushes the task branch to the project's remote (the same branch name,
+  no other refs, no tags). Who may push follows `push = "none" | "coordinator" | "child"` (default
+  `coordinator`: the project's coordinator and you). `--force` is `--force-with-lease` against the commit otag
+  pushed last. The push is recorded on the task (`task show`, TUI details, done notice) with a `task.pushed`
+  event.
+- `otag task reopen <task> "reason"`: a done task goes back to ready on the same worktree and branch; the next
+  run gets the reason, an accepted review goes stale (the task is reviewed again), and the done notice is
+  withdrawn. Delivered tasks cannot be reopened.
+- `otag task add/edit --base <ref>` (until the task's worktree exists) and `--review <profile|none>`.
+- `otag task deliver --delete-branch --force` deletes a branch that is not merged (squash merges).
+- Setup wizard and `otag project add` ask for the branch prefix, the base (with the repository's remote
+  default branch as the suggestion) and the push setting; `project add` takes `--branch-prefix`, `--base`,
+  `--push` and `--remote`.
+- TUI: Push… (`P`) and Reopen… (`O`) on tasks.
+
+### Changed
+
+- The default task branch is `feature/<task>` (was `otag/<task>`); set `branch_prefix` to choose another.
+  A task keeps the branch it got when its worktree was first created: existing tasks keep `otag/<task>`.
+- A review run works in a detached worktree at the reviewed commit instead of a branch of its own from the
+  project's HEAD; its prompt names the base, the head and the diff command.
+- The guard's `git push` refusal points to `otag task push`. Raw `git push` stays refused for every agent.
+- Database schema v11 (columns only; existing databases migrate in place).
+
 ## [0.1.1] - 2026-10-15
 
 ### Added

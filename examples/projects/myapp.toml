@@ -21,5 +21,12 @@ deny = [".env*", "secrets/**", "*.pem"]
 #   strict the full guard behind Claude's sandbox / Codex permissions.otag, clean env
 guard = "light"
 
+# Branches and merge/pull requests (docs/SETUP.md "Branches, base and push"; all optional).
+branch_prefix = "feature/"                # task branch = <branch_prefix><task>, the same name on the remote
+# base = "origin/main"                    # new task branches start here (a remote branch is fetched first);
+#                                         # unset: the checkout's HEAD; `otag task add --base` overrides it
+# remote = "origin"                       # where `otag task push` pushes; unset: the base's remote, else origin
+push = "coordinator"                      # who may run `otag task push`: none | coordinator (and you) | child
+
 # Extra fields are allowed and stored as-is.
 issue_tracker = "github"
