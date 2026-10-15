@@ -35,6 +35,6 @@
                      │   C-q or a click on "← otag" in its status bar (macOS: M-q needs Option as │
                      │   Meta). Inside your own tmux it opens as a popup. set -g @otag_ui off (in │
                      │   otag's tmux.conf) keeps otag's bindings and status bar off its server.   │
-── message ──────────│ ↑↓ pgup pgdn scroll · lines 30-64 of 64                                    │─────────────────────
+── message ──────────│ ↑↓ pgup pgdn scroll · lines 31-65 of 65                                    │─────────────────────
  to: coord ▾  info ▾ ╰────────────────────────────────────────────────────────────────────────────╯               [Send]
 [q] quit  [?] help  [!] needs  [tab] focus  [.] closed  [n] new  [s] start  [S] stop  [m] message  [r] reply  [i] type

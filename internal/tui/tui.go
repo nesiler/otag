@@ -41,6 +41,11 @@ type Options struct {
 	Text func(ctx context.Context, args ...string) (string, error)
 	// Environ is the environment an attach runs with (default os.Environ).
 	Environ func() []string
+	// Unconfigured: otag has no registry yet; the empty tree points to `otag init`.
+	Unconfigured bool
+	// AddDir is the git repository the TUI was started in, when no project uses it:
+	// the empty tree offers it and key a runs `otag project add` for it.
+	AddDir string
 }
 
 // hoverEnv turns on hover (the row under the pointer is highlighted). The design names
@@ -170,6 +175,7 @@ func Run(parent context.Context, o Options) error {
 	}
 	m := newModel(ctx, d, o.Project)
 	m.hover = getenv(hoverEnv) == "1"
+	m.unconfigured, m.addDir, m.home = o.Unconfigured, o.AddDir, getenv("HOME")
 	m.applyState(loadState(statePath(o.DataDir)))
 	// The renderer wakes up fps times a second even when nothing changed; 60 (the
 	// default) alone costs more CPU than all of the TUI's own work.

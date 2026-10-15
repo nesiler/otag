@@ -114,6 +114,8 @@ func (m *Model) do(act action, arg int, sc scope) tea.Cmd {
 		return m.expandAll()
 	case actSync:
 		return m.syncRegistry()
+	case actAddProject:
+		return m.addProject()
 	case actClosed:
 		m.tree.ShowClosed = !m.tree.ShowClosed
 		if m.snap != nil {

@@ -227,8 +227,8 @@ func (m *Model) treeLines(w, h int, in tree.Info) []string {
 	if m.snap == nil {
 		return nil
 	}
-	if len(m.tree.Rows) == 0 {
-		return []string{m.theme.Dim.Render("no projects: add one to the registry, then otag sync")}
+	if len(m.snap.Projects) == 0 {
+		return m.emptyLines(w)
 	}
 	return m.tree.Render(w, h, m.treeFocused(), in)
 }

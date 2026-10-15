@@ -59,6 +59,7 @@ const (
 	actCopy        // copy the id or attach command (OSC 52)
 	actExpandAll   // expand every row of the selected project
 	actSync        // otag sync: the registry into the database
+	actAddProject  // otag project add: the git repository the TUI was started in
 )
 
 // scope is where a binding applies.
@@ -107,6 +108,7 @@ var bindings = []binding{
 	bind(scopeGlobal, actClosed, 0, "closed", ".", "show or hide closed tasks", "."),
 	bind(scopeGlobal, actFilter, 0, "", "/", "filter the tree by id, title or profile (enter keeps it)", "/"),
 	bind(scopeGlobal, actClearFilter, 0, "", "esc", "clear the filter", "esc"),
+	bind(scopeGlobal, actAddProject, 0, "", "a", "add the repository otag tui started in (project add)", "a"),
 
 	bind(scopeTree, actUp, 0, "", "↑↓ k j", "move", "up", "k"),
 	bind(scopeTree, actDown, 0, "", "", "", "down", "j"),

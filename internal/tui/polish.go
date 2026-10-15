@@ -2,11 +2,13 @@ package tui
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/nesiler/otag/internal/setup"
 	"github.com/nesiler/otag/internal/tui/tree"
 )
 
@@ -166,6 +168,56 @@ func (m *Model) syncRegistry() tea.Cmd {
 		return nil
 	}
 	return m.fire(pending{args: []string{"sync"}})
+}
+
+// Add project.
+
+// addable is the git repository the TUI was started in when no project uses it yet
+// ("" = none).
+func (m *Model) addable() string {
+	if m.addDir == "" || m.snap == nil {
+		return ""
+	}
+	for _, p := range m.snap.Projects {
+		if filepath.Clean(p.Path) == filepath.Clean(m.addDir) {
+			return ""
+		}
+	}
+	return m.addDir
+}
+
+// addProject runs `otag project add <dir> --yes` for the TUI's repository.
+func (m *Model) addProject() tea.Cmd {
+	if why := m.actWhy(actAddProject); why != "" {
+		m.flash("add project: "+why, true)
+		return nil
+	}
+	return m.fire(pending{args: []string{"project", "add", m.addDir, "--yes"}})
+}
+
+// emptyLines is the tree without projects: how to set otag up or add one.
+func (m *Model) emptyLines(w int) []string {
+	var text string
+	switch {
+	case m.unconfigured:
+		text = "otag is not set up yet.\n\nQuit (q) and run `otag init` (or just `otag`) in a terminal: a short wizard " +
+			"finds your agents and writes the config."
+	case m.addable() != "":
+		text = "No projects yet.\n\nPress a to add " + setup.TildePath(m.addable(), m.home) + ", or run `otag project add` in a git repository."
+	default:
+		text = "No projects yet.\n\nRun `otag project add` in a git repository, then come back (ctrl+r reloads)."
+	}
+	var out []string
+	for _, l := range strings.Split(text, "\n") {
+		if l == "" {
+			out = append(out, "")
+			continue
+		}
+		for _, wl := range strings.Split(ansi.Wrap(l, max(10, w-1), ""), "\n") {
+			out = append(out, m.theme.Dim.Render(" "+wl))
+		}
+	}
+	return out
 }
 
 // Help overlay.

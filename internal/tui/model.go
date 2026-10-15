@@ -68,6 +68,11 @@ type Model struct {
 	d       deps
 	ctx     context.Context
 	project string // select this project's row once it appears
+	// unconfigured: otag has no registry yet; addDir: the git repository the TUI was
+	// started in (key a adds it while no project uses it).
+	unconfigured bool
+	addDir       string
+	home         string // $HOME, to show paths as ~/...
 
 	w, h       int
 	focus      focus

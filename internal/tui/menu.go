@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -100,10 +101,13 @@ func (m *Model) openMenu(build func() []menuItem, x, y int) {
 func (m *Model) actWhy(act action) string {
 	switch act {
 	case actNew, actEdit, actCancel, actReady, actBlock, actStart, actStop, actPark, actResume, actCoord, actReply,
-		actMessage, actReview, actDeliver, actAckAll, actSync:
+		actMessage, actReview, actDeliver, actAckAll, actSync, actAddProject:
 		if why := m.cannotAct(); why != "" {
 			return why
 		}
+	}
+	if act == actAddProject && m.addable() == "" {
+		return "otag tui was not started in a git repository that is not a project yet"
 	}
 	switch act {
 	case actNew, actCoord, actEdit, actCancel, actReady, actBlock, actStart, actStop, actPark, actResume, actReply,
@@ -220,8 +224,12 @@ func (m *Model) appMenu() []menuItem {
 		closed = "Hide closed tasks"
 	}
 	g := scopeGlobal
-	return []menuItem{m.act("Filter…", actFilter, 0, g), m.act(closed, actClosed, 0, g), m.act("Reload", actReload, 0, g),
+	items := []menuItem{m.act("Filter…", actFilter, 0, g), m.act(closed, actClosed, 0, g), m.act("Reload", actReload, 0, g),
 		m.act("Redraw", actRedraw, 0, g), m.act("Help", actHelp, 0, g), m.act("Quit", actQuit, 0, g)}
+	if dir := m.addable(); dir != "" {
+		items = append([]menuItem{m.act("Add project "+filepath.Base(dir), actAddProject, 0, g)}, items...)
+	}
+	return items
 }
 
 // dividerMenu is the menu of the divider.

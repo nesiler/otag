@@ -4,21 +4,21 @@
   ▾ ⇪ Ready to deliver (1)            │agent output
     ▸ ⇪ al-9 Add CSV export    done 3h│>
   ▾ ? al-14 Ask about colo… waiting 5m│
-      ? r1 sonnet     waiting 20m q91%│
-    ⊘ al-16╭────────────────────────────────────────────────────────────────────────────╮
-  ▾ ● al-12│ Everywhere                                                                 │
-      ● r2 │   q ctrl+c     quit (no agent is affected)                                 │
-      +1 ea│   ?            this help                                                   │
-      · al-│   1-6          tabs: Preview Details Needs Inbox Stats Log                 │
-    · al-13│   !            Needs tab                                                   │
-    ◌ al-15│   ctrl+r F5    reload now                                                  │
-▾ beta  lig│   ctrl+l       redraw the screen                                           │
-    · be-1 │   tab          focus: tree, right pane, message box (narrow: swaps; also   │
-           │                shift+tab)                                                  │
+      ? r1 ╭────────────────────────────────────────────────────────────────────────────╮
+    ⊘ al-16│ Everywhere                                                                 │
+  ▾ ● al-12│   q ctrl+c     quit (no agent is affected)                                 │
+      ● r2 │   ?            this help                                                   │
+      +1 ea│   1-6          tabs: Preview Details Needs Inbox Stats Log                 │
+      · al-│   !            Needs tab                                                   │
+    · al-13│   ctrl+r F5    reload now                                                  │
+    ◌ al-15│   ctrl+l       redraw the screen                                           │
+▾ beta  lig│   tab          focus: tree, right pane, message box (narrow: swaps; also   │
+    · be-1 │                shift+tab)                                                  │
            │   < > =        narrower, wider, default tree width                         │
            │   .            show or hide closed tasks                                   │
            │   /            filter the tree by id, title or profile (enter keeps it)    │
            │   esc          clear the filter                                            │
+           │   a            add the repository otag tui started in (project add)        │
            │                                                                            │
            │ Tree                                                                       │
            │   ↑↓ k j       move                                                        │
