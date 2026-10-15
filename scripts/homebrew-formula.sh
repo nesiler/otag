@@ -40,9 +40,8 @@ class Otag < Formula
 
   def caveats
     <<~EOS
-      Start the background daemon (launchd) and check your setup:
-        otag daemon install
-        otag doctor
+      Run \`otag\` to get started: a short wizard sets up your agents and a project,
+      and can install the background daemon (launchd; \`otag daemon install\`).
     EOS
   end
 

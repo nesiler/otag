@@ -91,7 +91,7 @@ done
 cat <<EOF
 
 Next steps:
-  otag doctor           # check your environment
-  otag daemon install   # install the launchd daemon
-  otag tui              # open the terminal UI
+  otag                  # first run: the setup wizard (agents, a project, the daemon)
+  otag doctor           # check your environment; every problem comes with its fix
+  otag tui              # open the terminal UI (later, plain otag does too)
 EOF
