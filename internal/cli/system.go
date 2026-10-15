@@ -20,15 +20,35 @@ import (
 	"github.com/nesiler/otag/internal/quota"
 	"github.com/nesiler/otag/internal/registry"
 	"github.com/nesiler/otag/internal/run"
+	"github.com/nesiler/otag/internal/setup"
 	"github.com/nesiler/otag/internal/task"
 )
 
 func cmdSync(ctx context.Context, a *app, args []string) (result, error) {
+	return a.sync(ctx, args, false)
+}
+
+// syncHeld is `otag sync` for a caller that already holds the config lock (init,
+// project add and remove): flock would block on a second descriptor of the same
+// process.
+func (a *app) syncHeld(ctx context.Context) (result, error) { return a.sync(ctx, nil, true) }
+
+// sync loads the registry and syncs it into the database while holding the config
+// lock (setup.LockConfig), so it never reads the config in the middle of a change by
+// otag init or otag project (a project file moved aside, a registry being replaced).
+func (a *app) sync(ctx context.Context, args []string, held bool) (result, error) {
 	fs := a.flagSet("sync")
 	var dryRun bool
 	fs.BoolVar(&dryRun, "dry-run", false, "validate and show changes without writing")
 	if _, err := parse(fs, args); err != nil {
 		return result{}, err
+	}
+	if !held && a.configured() {
+		unlock, err := setup.LockConfig(a.configDir(), 10*time.Second)
+		if err != nil {
+			return result{}, err
+		}
+		defer unlock()
 	}
 	cfg, err := registry.Load(a.configDir(), a.env.Getenv)
 	if err != nil {

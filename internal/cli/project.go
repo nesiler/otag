@@ -92,13 +92,11 @@ func projectAdd(ctx context.Context, a *app, args []string) (result, error) {
 	}
 	p := b.NewProject(repo, setup.Choices{})
 	if name != "" {
-		p.Name = name
-		if prefix == "" {
-			p.Prefix = b.UniquePrefix(name)
-		}
+		p.Name, p.AutoName = name, false
+		p.Prefix = b.UniquePrefix(name)
 	}
 	if prefix != "" {
-		p.Prefix = prefix
+		p.Prefix, p.AutoPrefix = prefix, false
 	}
 	if guardLevel != "" {
 		p.Guard = guardLevel

@@ -113,7 +113,7 @@ func (a *app) setupBase(ctx context.Context, force bool, detect bool) (setup.Bas
 	// The database is only looked at here (read-only, never created or migrated):
 	// nothing is written before the user agrees. Apply reads it again, writable.
 	if ro, err := db.OpenReadOnly(a.dbPath()); err == nil {
-		b.Known, _ = knownProjects(ctx, ro)
+		b.Known, b.KnownPaths, _ = knownProjects(ctx, ro)
 		_ = ro.Close()
 	}
 	if _, err := os.Stat(a.launchd().PlistFile()); err == nil {
@@ -126,24 +126,24 @@ func (a *app) setupBase(ctx context.Context, force bool, detect bool) (setup.Bas
 }
 
 // knownProjects maps every project the database knows (retired ones too) to its
-// prefix.
+// prefix, and their paths to their names.
 func knownProjects(ctx context.Context, q interface {
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
-}) (map[string]string, error) {
-	rows, err := q.QueryContext(ctx, `SELECT name, prefix FROM projects`)
+}) (map[string]string, map[string]string, error) {
+	rows, err := q.QueryContext(ctx, `SELECT name, prefix, path FROM projects`)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer func() { _ = rows.Close() }()
-	known := map[string]string{}
+	prefixes, paths := map[string]string{}, map[string]string{}
 	for rows.Next() {
-		var name, prefix string
-		if err := rows.Scan(&name, &prefix); err != nil {
-			return nil, err
+		var name, prefix, path string
+		if err := rows.Scan(&name, &prefix, &path); err != nil {
+			return nil, nil, err
 		}
-		known[name] = prefix
+		prefixes[name], paths[path] = prefix, name
 	}
-	return known, rows.Err()
+	return prefixes, paths, rows.Err()
 }
 
 // initData is the result of `otag init` and `otag project add`.
@@ -221,8 +221,16 @@ func (a *app) applySetup(ctx context.Context, b setup.Base, c setup.Choices) (in
 	if err != nil {
 		return data, err
 	}
-	if b.Known, err = knownProjects(ctx, d); err != nil {
+	if b.Known, b.KnownPaths, err = knownProjects(ctx, d); err != nil {
 		return data, err
+	}
+	// The wizard's look at the database may have missed recent commits: choose the
+	// automatic name and prefix again (a removed project gets its old ones back).
+	if c.Project != nil {
+		p := *c.Project
+		b.Refresh(&p)
+		c.Project = &p
+		data.Project = c.Project
 	}
 	files, err := b.Files(c, time.Now())
 	if err != nil {
@@ -238,7 +246,7 @@ func (a *app) applySetup(ctx context.Context, b setup.Base, c setup.Choices) (in
 		return data, err
 	}
 	data.Files = files
-	res, err := cmdSync(ctx, a, nil)
+	res, err := a.syncHeld(ctx)
 	if err != nil {
 		return data, err
 	}
