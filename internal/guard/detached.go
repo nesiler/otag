@@ -117,24 +117,42 @@ func (p Policy) checkSubstitutions(line string, depth int) Decision {
 
 // substitutions returns the bodies of the outermost $(...) and `...` in s that the
 // shell expands: outside quotes and inside double quotes, not inside single quotes
-// ('`rm -rf x`' is text), and not escaped (\$(, \`). An unterminated one runs to the
-// end.
+// ('`rm -rf x`' is text), not escaped (\$(, \`) and not in a comment (# to the end of
+// the line). A quote that is never closed is taken as a plain character (the shell
+// would reject the line), so it never hides what follows; an unterminated
+// substitution runs to the end.
 func substitutions(s string) []string {
 	var out []string
 	rs := []rune(s)
-	inSingle, inDouble := false, false
+	inDouble := false
+	// closing returns the index of the quote q that closes one opened at i (-1: none).
+	closing := func(i int, q rune) int {
+		for j := i + 1; j < len(rs); j++ {
+			switch {
+			case q == '"' && rs[j] == '\\':
+				j++
+			case rs[j] == q:
+				return j
+			}
+		}
+		return -1
+	}
 	for i := 0; i < len(rs); i++ {
 		switch {
-		case inSingle:
-			if rs[i] == '\'' {
-				inSingle = false
-			}
 		case rs[i] == '\\':
 			i++
+		case rs[i] == '#' && !inDouble && (i == 0 || strings.ContainsRune(" \t\n;&|()", rs[i-1])):
+			for i < len(rs) && rs[i] != '\n' {
+				i++
+			}
 		case rs[i] == '\'' && !inDouble:
-			inSingle = true
+			if j := closing(i, '\''); j > 0 {
+				i = j // single-quoted text expands nothing
+			}
 		case rs[i] == '"':
-			inDouble = !inDouble
+			if inDouble || closing(i, '"') > 0 {
+				inDouble = !inDouble
+			}
 		case rs[i] == '`':
 			j := i + 1
 			for j < len(rs) && rs[j] != '`' {

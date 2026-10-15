@@ -865,12 +865,17 @@ func parse(line string) []simpleCommand {
 			i++
 			word.WriteRune(rs[i])
 			inWord = true
-		case c == '\'':
+		case c == '#' && !inWord:
+			// A comment runs to the end of the line; its quotes quote nothing.
+			for i+1 < len(rs) && rs[i+1] != '\n' {
+				i++
+			}
+		case c == '\'' && closes(rs, i, '\''):
 			inWord = true
 			for i++; i < len(rs) && rs[i] != '\''; i++ {
 				word.WriteRune(rs[i])
 			}
-		case c == '"':
+		case c == '"' && closes(rs, i, '"'):
 			inWord = true
 			for i++; i < len(rs) && rs[i] != '"'; i++ {
 				if rs[i] == '\\' && i+1 < len(rs) {
@@ -942,4 +947,19 @@ func parse(line string) []simpleCommand {
 	}
 	flushCmd()
 	return cmds
+}
+
+// closes reports whether the quote q at rs[i] is closed later. An unclosed one (the
+// shell rejects the line) is taken as a plain character, so it never hides the
+// commands after it.
+func closes(rs []rune, i int, q rune) bool {
+	for j := i + 1; j < len(rs); j++ {
+		switch {
+		case q == '"' && rs[j] == '\\':
+			j++
+		case rs[j] == q:
+			return true
+		}
+	}
+	return false
 }

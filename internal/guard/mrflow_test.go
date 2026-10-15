@@ -86,6 +86,32 @@ func TestDetachedReviewWorktreeRound2(t *testing.T) {
 			t.Errorf("allowed %q", cmd)
 		}
 	}
+	// Round 4: a comment's apostrophe or an unclosed quote never hides a later
+	// substitution; a normal comment with an apostrophe leaves a legitimate command alone.
+	for _, cmd := range []string{"# Don't change refs\necho \"$(git branch review)\"",
+		"echo hi # it's here\ngit switch other", "git log; # don't\necho `git tag v9`",
+		"echo 'unclosed\necho \"$(git switch other)\"", "echo 'unclosed\ngit switch other"} {
+		if d := p.CheckCommand(cmd); d.Allow {
+			t.Errorf("allowed %q", cmd)
+		}
+	}
+	for _, cmd := range []string{"# it's fine\ngit log --oneline", "# don't worry: `git switch x` is in a comment\ngo test ./...",
+		"git status # isn't it\ngit diff", "echo a#b 'c'"} {
+		if d := p.CheckCommand(cmd); !d.Allow {
+			t.Errorf("denied %q: %s", cmd, d.Reason)
+		}
+	}
+	// The shared parser too, for every run: a comment or an unclosed quote does not
+	// hide the push on the next line; a comment is not a command.
+	normal := Policy{Workdir: wd, Level: Light, Branch: "feature/x-1"}
+	for _, cmd := range []string{"echo hi # it's here\ngit push", "echo 'unclosed\ngit push origin HEAD"} {
+		if d := normal.CheckCommand(cmd); d.Allow {
+			t.Errorf("normal run: allowed %q", cmd)
+		}
+	}
+	if d := normal.CheckCommand("# git push is the coordinator's job\ngo test ./..."); !d.Allow {
+		t.Errorf("normal run: a comment refused: %s", d.Reason)
+	}
 	// A directory of nested branches is not a branch: with docs/update and no branch
 	// docs, `git checkout docs` restores the directory docs; with the remote branch
 	// origin/feat/x, `git checkout feat` likewise (feat is a file here).
