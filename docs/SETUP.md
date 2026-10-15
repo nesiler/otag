@@ -17,8 +17,10 @@ written before the last one):
    directory. Without tmux or git it says how to install them (`brew install tmux`) and
    stops.
 2. **Agents.** One checkbox per agent CLI found. Each becomes an account that uses your
-   normal login: no `config_dir`, so Claude Code uses `~/.claude`, Codex `~/.codex` (or
-   `$CODEX_HOME`) and OpenCode its usual `~/.config/opencode`.
+   normal login: no `config_dir`, so Claude Code uses `~/.claude`, Codex `~/.codex` and
+   OpenCode its usual `~/.config/opencode`. If `$CLAUDE_CONFIG_DIR` or `$CODEX_HOME`
+   names another directory when setup runs, that directory becomes the account's
+   `config_dir` (runs do not inherit those variables, so it would be lost otherwise).
 3. **Profiles**, one page per agent, each preset on/off with its model and effort:
 
    | Profile | Model | Effort | Used for |
@@ -50,8 +52,14 @@ written before the last one):
    **Write** writes them atomically (a temporary file and a rename), runs `otag sync`, the
    daemon and skill installs you chose, and offers to open the TUI.
 
-Before anything is written, the result is loaded the way `otag sync` loads it; a
-configuration that would not load is never written.
+Until **Write**, nothing is written: the database is only read (read-only, without even
+a journal file), the config dir is not touched. On **Write** otag takes a lock in the
+config dir (`.otag-config.lock`, so two setup commands never interleave), loads the
+result the way `otag sync` would (a configuration that would not load is never written),
+and refuses with nothing written if `registry.toml` changed since setup read it (an edit
+saved meanwhile is never overwritten; run the command again). New files are created
+only if nothing is there yet, a changed `registry.toml` keeps its file mode, and a backup
+never replaces an earlier one (`-2`, `-3`, ... are added).
 
 ### `otag init`
 
@@ -83,10 +91,12 @@ terminal it shows the wizard's project page to confirm and edit; without one it 
 `--yes`. It writes `projects/<name>.toml` and runs `otag sync`.
 
 `project remove` renames the project's file to `<name>.toml.removed-<timestamp>` (kept,
-no longer loaded) and runs `otag sync`, which retires the project. Sync never deletes
-anything: the project's tasks, runs, messages and history stay in the database, and its
-worktrees and branches stay on disk. A project with runs that have not ended is refused
-(stop them first). `otag project add` brings it back, with its old prefix and tasks.
+no longer loaded; never over an earlier one) and runs `otag sync`, which retires the
+project. Sync never deletes anything: the project's tasks, runs, messages and history
+stay in the database, and its worktrees and branches stay on disk. A project with runs
+that have not ended is refused (stop them first); the check is repeated in the
+transaction that retires the project, so a run started meanwhile is seen and the file
+is put back. `otag project add` brings it back, with its old prefix and tasks.
 
 In the TUI, a tree without projects says what to do; if `otag tui` was started inside a
 git repository that is not a project yet, `a` (or the context menu) adds it.
