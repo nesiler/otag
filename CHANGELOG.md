@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-10-16
+
 ### Added
 
 - Merge/pull request flow primitives (mechanisms only; the workflow stays the project's): see
@@ -36,6 +38,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   project's HEAD; its prompt names the base, the head and the diff command.
 - The guard's `git push` refusal points to `otag task push`. Raw `git push` stays refused for every agent.
 - Database schema v11 (columns only; existing databases migrate in place).
+
+### Fixed
+
+- The guard skips shell comments and no longer lets an apostrophe in a comment or an unclosed quote hide the
+  next command.
 
 ## [0.1.1] - 2026-10-15
 
@@ -80,6 +87,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `otag version` and `otag --version`.
 - Install script, GoReleaser release builds (macOS arm64 and amd64) and a Homebrew formula that builds from source.
 
-[Unreleased]: https://github.com/nesiler/otag/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/nesiler/otag/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/nesiler/otag/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/nesiler/otag/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/nesiler/otag/releases/tag/v0.1.0
