@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-15
+
 ### Added
 
 - First-run setup: `otag init` (and plain `otag` on a machine that is not set up yet) runs a wizard that
@@ -27,6 +29,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   prints the usage and a hint. `otag help`, `-h` and `--help` print the usage on stdout.
 - The Homebrew caveats and the install script point to `otag` as the first step.
 
+### Fixed
+
+- The Homebrew formula no longer passes `-s -w` twice to the linker.
+
 ## [0.1.0] - 2026-10-15
 
 ### Added
@@ -44,5 +50,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `otag version` and `otag --version`.
 - Install script, GoReleaser release builds (macOS arm64 and amd64) and a Homebrew formula that builds from source.
 
-[Unreleased]: https://github.com/nesiler/otag/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/nesiler/otag/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/nesiler/otag/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/nesiler/otag/releases/tag/v0.1.0
