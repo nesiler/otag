@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- First-run setup: `otag init` (and plain `otag` on a machine that is not set up yet) runs a wizard that
+  detects Claude Code, Codex, OpenCode, tmux and git, proposes accounts and profiles with fallbacks,
+  registers the current git repository, offers the daemon and the agent skill, shows the files it will
+  write and writes commented TOML atomically, then syncs. `--yes` (non-interactive), `--no-daemon`,
+  `--force` (backs up the old registry). On a configured machine it only adds what is missing.
+- `otag project add [path]`, `otag project list` and `otag project remove <name>` (retires the project;
+  its tasks, history and worktrees are kept).
+- `otag doctor` checks tmux and git and gives every warning and failure a `fix:` (in `--json`, `fix`).
+- TUI: an empty tree says how to set otag up or add a project; `a` adds the repository the TUI was
+  started in.
+- [docs/SETUP.md](docs/SETUP.md).
+
+### Changed
+
+- Plain `otag` in a terminal opens the setup wizard (not configured) or the TUI; without a terminal it
+  prints the usage and a hint. `otag help`, `-h` and `--help` print the usage on stdout.
+- The Homebrew caveats and the install script point to `otag` as the first step.
+
 ## [0.1.0] - 2026-10-15
 
 ### Added

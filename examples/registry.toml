@@ -1,5 +1,6 @@
 # otag registry: accounts (harness login/config dirs) and profiles.
-# Copy to ~/.config/otag/registry.toml (or $OTAG_CONFIG_DIR/registry.toml) and run `otag sync`.
+# `otag init` writes a starting registry for you (docs/SETUP.md); this file shows every key.
+# Copy what you need to ~/.config/otag/registry.toml (or $OTAG_CONFIG_DIR/registry.toml) and run `otag sync`.
 #
 # account keys:  harness (claude|codex|opencode), config_dir, command (binary or wrapper), env,
 #                quota (table: disabled, oauth_usage (claude), litellm_provider (opencode); docs/QUOTA.md)

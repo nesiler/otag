@@ -136,6 +136,16 @@ When the database schema is newer than the binary (`db.ReadOnly`), the header sa
   right pane. Below 60x16: only "terminal too small".
 - The divider is a 1-column region; the tree is about 38% wide by default, clamped to
   `[24, width-31]`.
+- Empty tree (no projects in the database): without a registry it says otag is not set up
+  and to run `otag init` (or plain `otag`); with one, to run `otag project add` in a git
+  repository, or to press `a` when the TUI was started in a repository that is not a
+  project yet (`Options.Unconfigured`, `Options.AddDir`, set by `cmdTui`).
+
+The setup wizard (`internal/tui/wizard`, [SETUP.md](SETUP.md)) is a separate small Bubble
+Tea program built from the same `form` kit and theme: a header, one rounded box with the
+page's form, a footer of hints. Its model is pure (detection results and choices come in
+through `wizard.Options`; preview and apply are functions there), with golden views in
+`internal/tui/wizard/testdata` (`go test ./internal/tui/wizard -update`).
 
 ### Root model
 
@@ -334,6 +344,7 @@ buttons and the `?` overlay.
 | `<` / `>` / `=` | narrower / wider / default tree width | drag the divider | T1 |
 | `.` | show / hide closed tasks | menu "Show closed tasks" | T1 / T4 |
 | `/` | filter the tree (id, title, profile; case-insensitive, matches keep their ancestors, everything expanded meanwhile). Enter keeps it, Esc clears it (also when not editing) | menu "Filter…" | T4 |
+| `a` | add the git repository `otag tui` was started in as a project (`project add <dir> --yes`); only while no project uses it | menu "Add project <dir>" (header, footer, empty tree) | setup |
 
 ### Tree
 

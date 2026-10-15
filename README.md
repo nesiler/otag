@@ -69,13 +69,7 @@ From source (pure Go, no cgo):
 go install github.com/nesiler/otag/cmd/otag@latest
 ```
 
-Then install the background service (a launchd agent, `io.github.nesiler.otag`) and check your setup:
-
-```sh
-otag --version        # otag 0.1.0 (<commit>, <date>); also: otag version [--json]
-otag daemon install
-otag doctor
-```
+`otag --version` prints the version (`otag version --json` too).
 
 ### Verifying a release
 
@@ -88,49 +82,42 @@ gh attestation verify otag_<version>_darwin_arm64.tar.gz --repo nesiler/otag
 
 ## Quick start
 
-1. Describe your agent accounts and profiles in `~/.config/otag/registry.toml`. Copy
-   [examples/registry.toml](examples/registry.toml) and edit it.
-
-2. Register a project in `~/.config/otag/projects/<name>.toml`:
-
-   ```toml
-   path = "~/dev/projects/myapp"
-   prefix = "app"                        # task ids: app-x3f
-
-   coordinator_profile = "claude-opus-high"
-   default_profile = "claude-sonnet-high"
-   review_profile = "codex-gpt-high"     # optional; reviews should use a different model
-
-   workspace = "worktree"                # worktree | same
-   guard = "light"                       # light | strict
-   deny = [".env*", "*.pem"]
-   ```
-
-   See the files in [examples/projects/](examples/projects/) for all keys.
-
-3. Validate and load the configuration:
+1. **Run `otag` inside a project.** In a git repository you want agents to work on:
 
    ```sh
-   otag sync
+   cd ~/dev/myapp
+   otag
    ```
 
-4. Start the project's coordinator (add `--attach` to jump into its window), then open the TUI:
+   On first run this starts a short setup wizard (the same as `otag init`): it finds Claude Code, Codex and
+   OpenCode on your PATH, proposes profiles for them (models, effort, fallbacks), registers the repository as a
+   project, offers to install the background daemon, shows exactly which files it will write, writes them and
+   loads them. Nothing is written until you confirm; Esc cancels. No terminal (CI, a script)? Use
+   `otag init --yes`. Details: [docs/SETUP.md](docs/SETUP.md).
+
+2. **Open the TUI and start the coordinator.** The wizard ends by offering the TUI; later, plain `otag` opens it.
+   Select the project and press `c` to start its coordinator, or from the shell:
 
    ```sh
-   otag coord myapp
-   otag tui
+   otag coord myapp --attach   # the project's coordinator agent; tell it what to build
+   otag tui                    # the full-screen view (also: plain `otag`)
    ```
+
+3. **More projects:** `otag project add` inside another repository (`otag project list`, `otag project remove`).
+   **Check the setup:** `otag doctor`; every problem comes with the command that fixes it.
 
 The coordinator creates tasks with `otag task add` and starts children with `otag run start <task>`; you can do
 the same by hand. Useful commands: `otag status`, `otag needs` (what waits for you), `otag inbox`, `otag quota`,
-`otag stats`, `otag notify list`.
+`otag stats`, `otag notify list`. `otag prime` prints orientation (identity, task, allowed commands, unread
+messages) for the calling agent. Add `--json` to any command for a versioned machine-readable envelope.
 
-Optional:
+### Manual configuration
 
-- `otag skill install` installs a short global skill so Claude Code, Codex and OpenCode know when to use otag.
-- `otag prime` prints orientation (identity, task, allowed commands, unread messages) for the calling agent.
-
-Add `--json` to any command for a versioned machine-readable envelope.
+The wizard writes plain, commented TOML: `~/.config/otag/registry.toml` (accounts and profiles) and
+`~/.config/otag/projects/<name>.toml` (one per project). Edit them, then run `otag sync`. For setups beyond the
+wizard (several logins of one agent, custom model ids, strict guard, environment for API keys) see the annotated
+[examples/registry.toml](examples/registry.toml) and [examples/projects/](examples/projects/), and
+[docs/SETUP.md](docs/SETUP.md#manual-configuration).
 
 ## Concepts
 
@@ -147,6 +134,7 @@ Add `--json` to any command for a versioned machine-readable envelope.
 
 ## Documentation
 
+- [Setup](docs/SETUP.md): the first-run wizard, `otag init`, projects, the generated files
 - [Design](docs/DESIGN.md): goals, data model, decisions
 - [Daemon](docs/DAEMON.md): watchdogs, fallback, park and resume, review, delivery
 - [Adapters](docs/ADAPTERS.md): Claude Code, Codex and OpenCode integration, threat model
