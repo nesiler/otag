@@ -43,3 +43,55 @@ jobs:
       - uses: actions/attest-build-provenance@v4
         with:
           subject-path: dist/*.tar.gz
+
+  homebrew:
+    # Publishes a source-building formula to nesiler/homebrew-tap. Skipped (with a notice) when the
+    # HOMEBREW_TAP_GITHUB_TOKEN secret is not set.
+    needs: goreleaser
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+    steps:
+      - name: Check tap token
+        id: token
+        run: |
+          if [ -z "$TAP_TOKEN" ]; then
+            echo "::notice::HOMEBREW_TAP_GITHUB_TOKEN is not set; skipping the Homebrew formula update."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.token.outputs.ok == 'true'
+        uses: actions/checkout@v7
+        with:
+          path: otag
+      - if: steps.token.outputs.ok == 'true'
+        uses: actions/checkout@v7
+        with:
+          repository: nesiler/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          path: tap
+      - name: Write Formula/otag.rb
+        if: steps.token.outputs.ok == 'true'
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          url="https://github.com/${GITHUB_REPOSITORY}/archive/refs/tags/${GITHUB_REF_NAME}.tar.gz"
+          sha256="$(curl -fsSL --retry 3 "$url" | sha256sum | cut -d' ' -f1)"
+          mkdir -p tap/Formula
+          otag/scripts/homebrew-formula.sh "$version" "$sha256" "$GITHUB_SHA" > tap/Formula/otag.rb
+      - name: Push to the tap
+        if: steps.token.outputs.ok == 'true'
+        working-directory: tap
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/otag.rb
+          if git diff --cached --quiet; then
+            echo "Formula unchanged."
+            exit 0
+          fi
+          git commit -m "otag ${GITHUB_REF_NAME}"
+          git push

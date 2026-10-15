@@ -22,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Mouse-driven terminal UI (`otag tui`).
 - launchd daemon (`otag daemon`), `otag doctor`, SQLite-backed state.
 - `otag version` and `otag --version`.
-- Install script, GoReleaser release builds (macOS arm64 and amd64) and a Homebrew cask.
+- Install script, GoReleaser release builds (macOS arm64 and amd64) and a Homebrew formula that builds from source.
 
 [Unreleased]: https://github.com/nesiler/otag/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/nesiler/otag/releases/tag/v0.1.0

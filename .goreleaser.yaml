@@ -64,23 +64,5 @@ release:
     name: otag
   prerelease: auto
 
-# Binaries are not signed or notarized, so the cask strips the quarantine flag.
-homebrew_casks:
-  - name: otag
-    repository:
-      owner: nesiler
-      name: homebrew-tap
-      token: '{{ index .Env "HOMEBREW_TAP_GITHUB_TOKEN" }}'
-    homepage: https://github.com/nesiler/otag
-    description: Coordinate AI coding agents (Claude Code, Codex, OpenCode) through tmux
-    license: MIT
-    commit_msg_template: "chore: update {{ .ProjectName }} to {{ .Tag }}"
-    # Skip cleanly when the tap token is not configured.
-    skip_upload: '{{ if index .Env "HOMEBREW_TAP_GITHUB_TOKEN" }}false{{ else }}true{{ end }}'
-    hooks:
-      post:
-        install: |
-          if OS.mac?
-            system_command "/usr/bin/xattr",
-                           args: ["-dr", "com.apple.quarantine", "#{staged_path}/otag"]
-          end
+# Homebrew: a source-building formula is published to nesiler/homebrew-tap by
+# .github/workflows/release.yml (scripts/homebrew-formula.sh), not by GoReleaser.

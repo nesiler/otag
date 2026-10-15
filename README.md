@@ -51,7 +51,7 @@ which the campaign was coordinated.
 
 ## Install
 
-Homebrew:
+Homebrew (builds from source; Homebrew fetches Go and tmux for you):
 
 ```sh
 brew install nesiler/tap/otag
