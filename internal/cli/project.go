@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"database/sql"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -22,7 +23,7 @@ import (
 
 func cmdProject(ctx context.Context, a *app, args []string) (result, error) {
 	if len(args) == 0 {
-		return result{}, usageErr("usage: otag project add [path] [--name N] [--prefix P] [--guard light|strict] [--yes] | list | remove <name>")
+		return result{}, usageErr("usage: otag project add [path] [--name N] [--prefix P] [--guard light|strict] [--branch-prefix B] [--base REF] [--push none|coordinator|child] [--remote R] [--yes] | list | remove <name>")
 	}
 	switch args[0] {
 	case "add":
@@ -39,12 +40,16 @@ func cmdProject(ctx context.Context, a *app, args []string) (result, error) {
 // projects/<name>.toml, prefilled like the wizard's project page, then sync.
 func projectAdd(ctx context.Context, a *app, args []string) (result, error) {
 	fs := a.flagSet("project add")
-	var name, prefix, guardLevel, workspace string
+	var name, prefix, guardLevel, workspace, branchPrefix, base, push, remote string
 	var yes bool
 	fs.StringVar(&name, "name", "", "project name (default: the directory name)")
 	fs.StringVar(&prefix, "prefix", "", "task id prefix (default: derived from the name)")
 	fs.StringVar(&guardLevel, "guard", "", "guard level: light (default) | strict")
 	fs.StringVar(&workspace, "workspace", "", "worktree (default) | same")
+	fs.StringVar(&branchPrefix, "branch-prefix", "", "task branch prefix (default feature/)")
+	fs.StringVar(&base, "base", "", "ref new task branches start from (default: the checkout's HEAD)")
+	fs.StringVar(&push, "push", "", "who may run otag task push: none | coordinator (default) | child")
+	fs.StringVar(&remote, "remote", "", "where otag task push pushes (default: the base's remote, else origin)")
 	fs.BoolVar(&yes, "yes", false, "do not ask")
 	pos, err := parse(fs, args)
 	if err != nil {
@@ -52,7 +57,7 @@ func projectAdd(ctx context.Context, a *app, args []string) (result, error) {
 	}
 	switch {
 	case len(pos) > 1:
-		return result{}, usageErr("usage: otag project add [path] [--name N] [--prefix P] [--guard light|strict] [--yes]")
+		return result{}, usageErr("usage: otag project add [path] [--name N] [--prefix P] [--guard light|strict] [--branch-prefix B] [--base REF] [--push none|coordinator|child] [--remote R] [--yes]")
 	case a.json && !yes:
 		return result{}, usageErr("otag project add --json needs --yes")
 	case !yes && !a.terminal():
@@ -103,6 +108,18 @@ func projectAdd(ctx context.Context, a *app, args []string) (result, error) {
 	}
 	if workspace != "" {
 		p.Workspace = workspace
+	}
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "branch-prefix" {
+			p.BranchPrefix = branchPrefix // "" is allowed: the task id alone
+		}
+	})
+	p.Base, p.Remote = base, remote
+	if push != "" {
+		p.Push = push
+	}
+	if p.BaseHint == "" {
+		p.BaseHint = a.prober().RemoteHead(ctx, repo)
 	}
 	c := setup.Choices{Project: &p}
 	if yes {
@@ -156,6 +173,10 @@ type projectInfo struct {
 	DefaultProfile     string   `json:"default_profile,omitempty"`
 	ReviewProfile      string   `json:"review_profile,omitempty"`
 	Deny               []string `json:"deny"`
+	BranchPrefix       string   `json:"branch_prefix"`
+	Base               string   `json:"base,omitempty"`
+	Remote             string   `json:"remote,omitempty"`
+	Push               string   `json:"push"`
 	File               string   `json:"file"`
 }
 
@@ -179,7 +200,7 @@ func projectList(_ context.Context, a *app, args []string) (result, error) {
 		}
 		out = append(out, projectInfo{Name: p.Name, Path: p.Path, Prefix: p.Prefix, Workspace: p.Workspace, Guard: p.Guard,
 			CoordinatorProfile: p.CoordinatorProfile, DefaultProfile: p.DefaultProfile, ReviewProfile: p.ReviewProfile,
-			Deny: deny, File: p.File})
+			Deny: deny, BranchPrefix: p.BranchPrefix, Base: p.Base, Remote: p.Remote, Push: p.Push, File: p.File})
 	}
 	return result{data: out, human: func(w io.Writer) {
 		if len(out) == 0 {

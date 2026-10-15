@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/nesiler/otag/internal/registry"
+	"github.com/nesiler/otag/internal/workspace"
 )
 
 // Profile tiers: they order fallbacks and pick a project's default profiles.
@@ -53,6 +54,17 @@ type Project struct {
 	Coordinator string   `json:"coordinator_profile,omitempty"`
 	Default     string   `json:"default_profile,omitempty"`
 	Review      string   `json:"review_profile,omitempty"`
+	// BranchPrefix starts every task branch (default workspace.DefaultBranchPrefix).
+	BranchPrefix string `json:"branch_prefix"`
+	// Base is the ref new task branches start from ("" = the checkout's HEAD).
+	Base string `json:"base,omitempty"`
+	// Remote is where `otag task push` pushes ("" = the base's remote, else origin).
+	Remote string `json:"remote,omitempty"`
+	// Push is who may run `otag task push`: none | coordinator (default) | child.
+	Push string `json:"push"`
+	// BaseHint is the repository's remote default branch (origin/main), offered as the
+	// base; "" when it has none.
+	BaseHint string `json:"-"`
 	// AutoName / AutoPrefix: chosen by setup, not by the user. Apply chooses them
 	// again against the database it then reads writable (Base.Refresh).
 	AutoName   bool `json:"-"`
@@ -364,7 +376,11 @@ func nearest(refs []Ref, h, tier string, ok func(Ref) bool) (Ref, bool) {
 func (b Base) NewProject(dir string, c Choices) Project {
 	name := b.ProjectName(dir)
 	p := Project{Name: name, Path: dir, Prefix: b.UniquePrefix(name), Workspace: "worktree", Guard: "light",
-		Deny: slices.Clone(DefaultDeny), AutoName: true, AutoPrefix: true}
+		Deny: slices.Clone(DefaultDeny), AutoName: true, AutoPrefix: true,
+		BranchPrefix: workspace.DefaultBranchPrefix, Push: registry.PushCoordinator}
+	if SamePath(dir, b.Detect.Repo) {
+		p.BaseHint = b.Detect.RepoBase
+	}
 	p.Coordinator, p.Default, p.Review = DefaultProfiles(b.Refs(c))
 	return p
 }

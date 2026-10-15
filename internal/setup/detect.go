@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/nesiler/otag/internal/registry"
+	"github.com/nesiler/otag/internal/workspace"
 )
 
 // Tool is a program found (or not) on PATH.
@@ -44,6 +45,9 @@ type Detection struct {
 	// Repo is the top-level directory of the git repository the current directory is
 	// in ("" = none).
 	Repo string `json:"repo,omitempty"`
+	// RepoBase is Repo's remote default branch as a remote-tracking ref (origin/main),
+	// offered as the project's base ("" = none).
+	RepoBase string `json:"repo_base,omitempty"`
 }
 
 // Harness returns the detection result of harness h.
@@ -162,8 +166,33 @@ func (p Prober) Detect(ctx context.Context, cwd string) Detection {
 	wg.Wait()
 	if d.Git.Found() {
 		d.Repo = p.repo(ctx, d.Git.Path, cwd)
+		if d.Repo != "" {
+			d.RepoBase = p.remoteHead(ctx, d.Git.Path, d.Repo)
+		}
 	}
 	return d
+}
+
+// RemoteHead is the remote default branch of the repository at repo (origin/main; ""
+// = none, or git is not on PATH).
+func (p Prober) RemoteHead(ctx context.Context, repo string) string {
+	bin, ok := LookPath("git", p.PATH)
+	if !ok || repo == "" {
+		return ""
+	}
+	return p.remoteHead(ctx, bin, repo)
+}
+
+func (p Prober) remoteHead(ctx context.Context, bin, repo string) string {
+	run := p.Run
+	if run == nil {
+		run = runCommand
+	}
+	out, err := run(ctx, bin, append([]string{"-C", repo}, workspace.RemoteHeadArgs...)...)
+	if err != nil {
+		return ""
+	}
+	return workspace.ParseRemoteHeads(out)
 }
 
 // Repo is the top-level directory of the git repository dir is in ("" = none, or

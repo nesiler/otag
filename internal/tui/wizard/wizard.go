@@ -412,6 +412,9 @@ func (m *Model) collect(check bool) string {
 		p.Name, p.Prefix = name, prefix
 		p.Workspace = m.f.Get("workspace")
 		p.Guard = m.f.Get("guard")
+		p.BranchPrefix = strings.TrimSpace(m.f.Get("branch_prefix"))
+		p.Base = strings.TrimSpace(m.f.Get("base"))
+		p.Push = m.f.Get("push")
 		p.Coordinator, p.Default, p.Review = m.f.Get("coord"), m.f.Get("default"), m.f.Get("review")
 		p.Deny = splitList(m.f.Get("deny"))
 		m.c.Project = p

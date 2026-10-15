@@ -238,11 +238,27 @@ func RenderProject(p Project, home string, now time.Time) string {
 	profile("default_profile", p.Default, "children run this unless a task names another")
 	profile("review_profile", p.Review, "reviews; best a different model family")
 	w.WriteString("\n")
-	w.WriteString("# worktree: each task gets a git worktree and branch otag/<task>; same: the checkout itself\n")
+	w.WriteString("# worktree: each task gets a git worktree and branch <branch_prefix><task>; same: the checkout itself\n")
 	w.WriteString(kv("workspace", quote(p.Workspace), ""))
 	w.WriteString("# light: push, git on other refs, writes outside the worktree and deny files are refused\n")
 	w.WriteString("# strict: the full guard behind the harness's sandbox (docs/ADAPTERS.md \"Threat model\")\n")
 	w.WriteString(kv("guard", quote(p.Guard), ""))
 	w.WriteString(kv("deny", quoteList(p.Deny), "files the agents must not read or write"))
+	w.WriteString("\n# Branches and merge/pull requests (docs/DAEMON.md \"MR/PR flow\")\n")
+	w.WriteString(kv("branch_prefix", quote(p.BranchPrefix), "task branch = <branch_prefix><task>, the same name on the remote"))
+	switch {
+	case p.Base != "":
+		w.WriteString(kv("base", quote(p.Base), "new task branches start here; a remote branch is fetched first"))
+	case p.BaseHint != "":
+		fmt.Fprintf(&w, "# base = %s   # new task branches start here (fetched first); unset: the checkout's HEAD\n", quote(p.BaseHint))
+	default:
+		w.WriteString("# base = \"origin/main\"   # new task branches start here (fetched first); unset: the checkout's HEAD\n")
+	}
+	if p.Remote != "" {
+		w.WriteString(kv("remote", quote(p.Remote), "where otag task push pushes"))
+	} else {
+		w.WriteString("# remote = \"origin\"   # where otag task push pushes; unset: the base's remote, else origin\n")
+	}
+	w.WriteString(kv("push", quote(p.Push), "who may run otag task push: none | coordinator (and you) | child (also the task's own run)"))
 	return w.String()
 }

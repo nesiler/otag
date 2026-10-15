@@ -7,6 +7,9 @@
 │ prefix:      mya                                                             │
 │ workspace:   ‹ worktree (a git worktree per task) ›                          │
 │ guard:       ‹ light (default) ›                                             │
+│ branches:    feature/                                                        │
+│ base:        blank = the checkout's HEAD; e.g. origin/main                   │
+│ push:        ‹ coordinator (the coordinator and you push; default) ›         │
 │ coordinator: ‹ claude-opus (claude) ›                                        │
 │ default:     ‹ claude-sonnet (claude) ›                                      │
 │ review:      ‹ codex (codex) ›                                               │
@@ -16,9 +19,6 @@
 │ review is best on another model family.                                      │
 │                                                                              │
 │ [ Next ]  [ Back ]  [ Cancel ]                                               │
-│                                                                              │
-│                                                                              │
-│                                                                              │
 │                                                                              │
 ╰──────────────────────────────────────────────────────────────────────────────╯
  tab ↑↓ move · space toggle · ←→ choose · ctrl+s next · esc cancel

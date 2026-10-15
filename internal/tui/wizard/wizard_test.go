@@ -446,3 +446,42 @@ func TestScrollLongReview(t *testing.T) {
 		t.Fatalf("off %d", fl.Off)
 	}
 }
+
+// The project page asks for the branch prefix (feature/), the base (blank; the
+// repository's remote default branch is the placeholder) and the push policy
+// (coordinator); what is chosen reaches the written project, and a bad prefix is
+// refused on the page.
+func TestProjectMRFlowFields(t *testing.T) {
+	b := base()
+	b.Detect = setup.Detection{Repo: home + "/dev/myapp", RepoBase: "origin/trunk"}
+	b.RegistryExists = true
+	b.Existing = &registry.Config{Accounts: map[string]registry.Account{"c": {Harness: "claude"}},
+		Profiles: map[string]registry.Profile{"sonnet": {Account: "c"}}}
+	x := newH(t, Project, b, 80, 30)
+	f := x.m.f
+	if f.Get("branch_prefix") != "feature/" || f.Get("base") != "" || f.Get("push") != "coordinator" ||
+		!strings.Contains(f.Field("base").Placeholder, "origin/trunk") {
+		t.Fatalf("defaults %q %q %q %q", f.Get("branch_prefix"), f.Get("base"), f.Get("push"), f.Field("base").Placeholder)
+	}
+	f.Field("branch_prefix").Ed.Set("bad..prefix/")
+	x.key("ctrl+s")
+	if x.page() != pgProject || !strings.Contains(x.m.f.Err, "prefix") {
+		t.Fatalf("bad prefix: page %v err %q", x.page(), x.m.f.Err)
+	}
+	f.Field("branch_prefix").Ed.Set("team/")
+	f.Field("base").Ed.Set("origin/trunk")
+	push := f.Field("push")
+	for i, o := range push.Opts {
+		if o.Value == "child" {
+			push.Sel = i
+		}
+	}
+	x.key("ctrl+s", "enter")
+	if len(x.applied) != 1 || x.applied[0].Project == nil {
+		t.Fatalf("applied %+v", x.applied)
+	}
+	p := x.applied[0].Project
+	if p.BranchPrefix != "team/" || p.Base != "origin/trunk" || p.Push != "child" {
+		t.Fatalf("project %+v", p)
+	}
+}

@@ -15,6 +15,7 @@ import (
 	"github.com/nesiler/otag/internal/apperr"
 	"github.com/nesiler/otag/internal/paths"
 	"github.com/nesiler/otag/internal/registry"
+	"github.com/nesiler/otag/internal/workspace"
 )
 
 // File is one file setup writes.
@@ -152,6 +153,20 @@ func (b Base) CheckProject(p Project, c Choices) error {
 	}
 	if p.Guard != "light" && p.Guard != "strict" {
 		bad("guard %q must be light or strict", p.Guard)
+	}
+	if err := workspace.CheckBranchPrefix(p.BranchPrefix); err != nil {
+		bad("%v", err)
+	}
+	if p.Base != "" {
+		if err := workspace.CheckRef(p.Base); err != nil {
+			bad("base: %v", err)
+		}
+	}
+	if p.Remote != "" && (workspace.CheckRef(p.Remote) != nil || strings.Contains(p.Remote, "/")) {
+		bad("remote %q is not a remote name", p.Remote)
+	}
+	if !slices.Contains(registry.PushPolicies, p.Push) {
+		bad("push %q must be %s", p.Push, strings.Join(registry.PushPolicies, ", "))
 	}
 	refs := b.Refs(c)
 	for _, f := range []struct{ key, name string }{

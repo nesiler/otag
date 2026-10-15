@@ -425,9 +425,23 @@ func TestChecks(t *testing.T) {
 	b := Base{ConfigDir: t.TempDir(), Detect: d, Existing: &registry.Config{
 		Projects: []registry.Project{{Name: "taken", Prefix: "tk", Path: "/dev/taken"}}}}
 	c := b.Defaults()
-	ok := Project{Name: "new", Path: "/dev/new", Prefix: "nw", Workspace: "worktree", Guard: "light", Default: "claude-sonnet"}
+	ok := Project{Name: "new", Path: "/dev/new", Prefix: "nw", Workspace: "worktree", Guard: "light", Default: "claude-sonnet",
+		BranchPrefix: "feature/", Push: "coordinator"}
 	if err := b.CheckProject(ok, c); err != nil {
 		t.Fatal(err)
+	}
+	for _, good := range []func(p *Project){
+		func(p *Project) { p.BranchPrefix = "" },
+		func(p *Project) {
+			p.BranchPrefix, p.Base, p.Remote, p.Push = "team/x-", "origin/dev", "upstream", "child"
+		},
+		func(p *Project) { p.Push = "none" },
+	} {
+		p := ok
+		good(&p)
+		if err := b.CheckProject(p, c); err != nil {
+			t.Errorf("%+v: %v", p, err)
+		}
 	}
 	for _, bad := range []func(p *Project){
 		func(p *Project) { p.Name = "Bad Name" },
@@ -439,6 +453,13 @@ func TestChecks(t *testing.T) {
 		func(p *Project) { p.Guard = "loose" },
 		func(p *Project) { p.Workspace = "tmp" },
 		func(p *Project) { p.Review = "nope" },
+		func(p *Project) { p.BranchPrefix = "feature//" },
+		func(p *Project) { p.BranchPrefix = "-x/" },
+		func(p *Project) { p.Base = "--upload-pack=x" },
+		func(p *Project) { p.Base = "a..b" },
+		func(p *Project) { p.Remote = "origin/x" },
+		func(p *Project) { p.Push = "everyone" },
+		func(p *Project) { p.Push = "" },
 	} {
 		p := ok
 		bad(&p)

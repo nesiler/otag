@@ -428,3 +428,45 @@ func TestProjectCommands(t *testing.T) {
 		t.Fatalf("task list:\n%s", out)
 	}
 }
+
+// otag project add asks for the MR flow settings too: the defaults (branch_prefix
+// feature/, push coordinator, base unset with the repository's remote default branch
+// as the commented suggestion) and the flags; bad values are refused before anything
+// is written.
+func TestProjectAddMRFlowSettings(t *testing.T) {
+	f := newFresh(t, "claude")
+	f.cwd = f.root
+	f.ok("init", "--yes", "--no-daemon")
+	gitIn(t, f.repo, "update-ref", "refs/remotes/origin/main", "HEAD")
+	gitIn(t, f.repo, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
+	for _, bad := range [][]string{{"--push", "everyone"}, {"--branch-prefix", "a..b/"}, {"--base", "-x"}, {"--remote", "a/b"}} {
+		code, e := f.json(append([]string{"project", "add", f.repo, "--yes", "--name", "bad"}, bad...)...)
+		wantCode(t, strings.Join(bad, " "), code, e, "INVALID_ARGUMENT")
+	}
+	if _, err := os.Stat(filepath.Join(f.cfg, "projects", "bad.toml")); err == nil {
+		t.Fatal("a refused project was written")
+	}
+	f.ok("project", "add", f.repo, "--yes", "--name", "plain")
+	p := f.read("projects/plain.toml")
+	for _, want := range []string{`branch_prefix = "feature/"`, `push = "coordinator"`, `# base = "origin/main"`, `# remote = "origin"`} {
+		if !strings.Contains(p, want) {
+			t.Errorf("default project file lacks %q:\n%s", want, p)
+		}
+	}
+	f.ok("project", "remove", "plain")
+	f.ok("project", "add", f.repo, "--yes", "--name", "mr", "--branch-prefix", "team/", "--base", "origin/main",
+		"--push", "child", "--remote", "origin")
+	p = f.read("projects/mr.toml")
+	for _, want := range []string{`branch_prefix = "team/"`, `base = "origin/main"`, `remote = "origin"`, `push = "child"`} {
+		if !strings.Contains(p, want) {
+			t.Errorf("project file lacks %q:\n%s", want, p)
+		}
+	}
+	_, e := f.json("project", "list")
+	var list []projectInfo
+	_ = json.Unmarshal(e.Data, &list)
+	if len(list) != 1 || list[0].BranchPrefix != "team/" || list[0].Base != "origin/main" || list[0].Push != "child" ||
+		list[0].Remote != "origin" {
+		t.Fatalf("list %s", e.Data)
+	}
+}

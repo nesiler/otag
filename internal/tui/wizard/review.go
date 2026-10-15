@@ -7,6 +7,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/nesiler/otag/internal/registry"
 	"github.com/nesiler/otag/internal/setup"
 	"github.com/nesiler/otag/internal/tui/form"
 )
@@ -51,6 +52,10 @@ func (m *Model) projectForm() *form.Form {
 			[]string{"worktree (a git worktree per task)", "same (the checkout itself)"}, p.Workspace),
 		choose("guard", "guard", []string{"light", "strict"},
 			[]string{"light (default)", "strict (sandboxed)"}, p.Guard),
+		text("branch_prefix", "branches", p.BranchPrefix, "task branch = <prefix><task>; blank = the task id alone"),
+		text("base", "base", p.Base, baseHint(p.BaseHint)),
+		choose("push", "push", registry.PushPolicies, []string{"none (otag never pushes)",
+			"coordinator (the coordinator and you push; default)", "child (also a task's own run)"}, p.Push),
 		m.profileSelect("coord", "coordinator", refs, p.Coordinator, func(r setup.Ref) bool { return r.Harness == "claude" }),
 		m.profileSelect("default", "default", refs, p.Default, nil),
 		m.profileSelect("review", "review", refs, p.Review, nil),
@@ -63,6 +68,15 @@ func (m *Model) projectForm() *form.Form {
 	}
 	fields = append(fields, note("note", n))
 	return form.New("Project", m.navButtons("Next"), fields...)
+}
+
+// baseHint is the placeholder of the base field: blank is the checkout's HEAD; the
+// repository's remote default branch is the suggestion.
+func baseHint(remoteHead string) string {
+	if remoteHead == "" {
+		return "blank = the checkout's HEAD; e.g. origin/main"
+	}
+	return "blank = the checkout's HEAD; e.g. " + remoteHead
 }
 
 // profileSelect chooses one of refs (ok filters them; nil: all) or none.
