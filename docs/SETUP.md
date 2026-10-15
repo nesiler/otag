@@ -71,20 +71,38 @@ Editors do not take otag's lock, so the change to an existing `registry.toml` (a
 append, or `--force`) is made so that an edit saved at any moment is never lost:
 
 1. The new content is written to a temporary file.
-2. The current `registry.toml` is moved aside (renamed: to the backup with `--force`,
-   else to a hidden `.registry.toml.otag-old`), and the moved file is hashed.
+2. The current `registry.toml` is moved aside (renamed to a hidden
+   `.registry.toml.otag-old`), and the moved file is hashed.
 3. If it is not the file setup read (you saved in between), it is moved back and
    nothing is written: run the command again.
 4. Else the new file is renamed into place without replacing anything. If you saved
    after step 2, your save created `registry.toml` again: otag leaves it there, keeps
    the version before it aside (the error names it) and writes nothing.
-5. Only then is the aside copy removed (or kept as the `--force` backup).
+5. Only then is the aside copy removed (or, with `--force`, renamed to the backup).
 
 For an instant between steps 2 and 4 there is no `registry.toml`; `otag sync` waits
 for the lock and never sees that. An editor that keeps the file open and writes into
 it in place (not by saving a new file) during those milliseconds writes into the
 moved-aside copy, which is then kept only as a `--force` backup: save, then run
 setup.
+
+### An interrupted change
+
+If otag is stopped in the middle of a change (a crash, kill -9), a file can be left
+aside: `.registry.toml.otag-old`, or `projects/.<name>.toml.otag-removing` from `otag
+project remove`. Every command that changes or syncs the config (`otag init`, `otag
+project`, `otag sync`, also through the TUI) first takes the lock and checks for them:
+
+- the original file is missing: it is put back (a no-replace rename) and the command
+  says so, so a registry is never taken for a fresh machine and a removal is either
+  complete or not done at all (run `otag project remove` again);
+- the original exists too (it was saved again, or the change completed except for
+  the cleanup): otag touches neither, refuses to change the config and names both
+  files. Keep the version you want under the original name and delete the other.
+
+`otag doctor` reports either case as a failure with its fix. Temporary files of an
+unfinished write (`.<file>.otag-tmp-*`) never hold the only copy of anything and are
+removed.
 
 ### `otag init`
 
