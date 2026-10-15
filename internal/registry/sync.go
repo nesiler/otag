@@ -117,9 +117,10 @@ ON CONFLICT (profile_id, config_hash) DO NOTHING`,
 		deny, _ := json.Marshal(nonNilSlice(p.Deny))
 		_, err = upsert(ctx, tx, &res.Projects, "projects", p.Name, hash,
 			[]string{"path", "prefix", "coordinator_profile_id", "default_profile_id", "review_profile_id",
-				"workspace_mode", "deny", "guard", "config"},
+				"workspace_mode", "deny", "guard", "base", "branch_prefix", "remote", "push", "config"},
 			[]any{p.Path, p.Prefix, refID(profileIDs, p.CoordinatorProfile), refID(profileIDs, p.DefaultProfile),
-				refID(profileIDs, p.ReviewProfile), p.Workspace, string(deny), p.Guard, conf})
+				refID(profileIDs, p.ReviewProfile), p.Workspace, string(deny), p.Guard, p.Base, p.BranchPrefix, p.Remote,
+				p.Push, conf})
 
 		if err != nil {
 			return res, fmt.Errorf("project %s: %w", p.Name, err)

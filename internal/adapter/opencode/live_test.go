@@ -228,7 +228,7 @@ model = %q
 	} else {
 		t.Logf("usage: %+v", *r.Usage)
 	}
-	if got := git(t, repo, "show", "otag/"+tk.ID+":hello.txt"); strings.TrimSpace(got) != "hi" {
+	if got := git(t, repo, "show", "feature/"+tk.ID+":hello.txt"); strings.TrimSpace(got) != "hi" {
 		t.Errorf("hello.txt on the task branch = %q", got)
 	}
 

@@ -539,6 +539,23 @@ func closeQuestion(ctx context.Context, tx *sql.Tx, m *Message, reason string, a
 	return nil
 }
 
+// Retract withdraws message id: its deliveries that were not taken yet (queued) expire
+// with why, and the notifications about it are acknowledged. What a recipient already
+// has stays. It returns how many deliveries expired.
+func Retract(ctx context.Context, tx *sql.Tx, id int64, why string, a Actor) (int, error) {
+	ds, err := deliveries(ctx, tx, " WHERE d.message_id = ? AND d.state = 'queued'", id)
+	if err != nil {
+		return 0, err
+	}
+	for i := range ds {
+		if err := expire(ctx, tx, &ds[i], Expired, why, a); err != nil {
+			return 0, err
+		}
+	}
+	_, err = tx.ExecContext(ctx, `UPDATE notifications SET read_at = ? WHERE message_id = ? AND read_at IS NULL`, db.Now(), id)
+	return len(ds), err
+}
+
 // expire moves a delivery to expired or dead with a reason.
 func expire(ctx context.Context, tx *sql.Tx, d *Delivery, to, why string, a Actor) error {
 	var c change

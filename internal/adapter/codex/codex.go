@@ -259,7 +259,8 @@ func strictPermissions(ctx context.Context, spec adapter.RunSpec, db string, bas
 
 // metadataRules returns the native filesystem rules outside the workspace that an
 // agent commit and `otag done`/`otag fail` need, as ordered [path, access] pairs. With
-// branch (otag/<task>) set in a linked worktree, only that branch's ref is writable.
+// branch set in a linked worktree, only that branch's ref is writable; a detached
+// linked worktree (a review checkout) writes no ref.
 //
 // Codex resolves overlapping rules by specificity: a nested "read" inside a "write"
 // root stays read-only, including renames over it and paths that do not exist yet
@@ -303,6 +304,10 @@ func metadataRules(ctx context.Context, workdir, branch, db string) ([][2]string
 		// which the read-only refs/ also refuses).
 		ref := filepath.Join("refs", "heads", filepath.FromSlash(branch))
 		add("write", common, "objects", ref, ref+".lock", filepath.Dir(filepath.Join("logs", ref)))
+	case gitDir != common:
+		// A detached linked worktree (a review checkout): a commit there writes objects
+		// and the worktree's own HEAD (under gitDir, below); no ref is writable.
+		add("write", common, "objects")
 	default:
 		// Same mode or no branch: shared repository
 		// data a commit writes, refs included.

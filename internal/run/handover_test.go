@@ -49,7 +49,7 @@ func taskWorktree(t *testing.T, m *Manager, repo, taskID, runID string, n int) s
 	t.Helper()
 	path := paths.Worktree(m.Getenv, "x", taskID)
 	ws, err := workspace.Prepare(context.Background(), workspace.Spec{Mode: workspace.Worktree, ProjectPath: repo, Path: path,
-		Branch: workspace.BranchFor(taskID)})
+		Branch: workspace.BranchFor("otag/", taskID)})
 	if err != nil {
 		t.Fatal(err)
 	}

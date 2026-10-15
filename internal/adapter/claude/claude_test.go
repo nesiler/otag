@@ -618,10 +618,32 @@ func TestPrepareSandboxAndHooks(t *testing.T) {
 	}
 	// Same mode: the git dir is the workspace's own and stays writable.
 	same := testSpec()
-	same.Workdir, same.Branch = repo, ""
+	same.Workdir, same.ProjectPath, same.Branch = repo, repo, ""
 	ls, _ = New().Prepare(context.Background(), same)
 	if b := string(fileMap(ls)[settingsFile]); strings.Contains(b, "Edit(/"+repo+"/.git") || strings.Contains(b, "packed-refs") {
 		t.Errorf("same mode settings deny git: %s", b)
+	}
+	// A detached review worktree has no branch either, but it is a linked worktree:
+	// its .git pointer and every branch ref stay protected.
+	review := testSpec()
+	review.Workdir, review.ProjectPath, review.Branch = wt, repo, ""
+	ls, _ = New().Prepare(context.Background(), review)
+	var rs struct {
+		Permissions struct{ Deny []string } `json:"permissions"`
+		Sandbox     struct {
+			Filesystem struct{ AllowWrite, DenyWrite []string } `json:"filesystem"`
+		} `json:"sandbox"`
+	}
+	if err := json.Unmarshal(fileMap(ls)[settingsFile], &rs); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(rs.Permissions.Deny, "Edit(/"+wt+"/.git)") {
+		t.Errorf("detached review worktree: .git not denied: %v", rs.Permissions.Deny)
+	}
+	for _, p := range []string{filepath.Join(common, "refs/heads/main"), filepath.Join(common, "refs/heads/otag/al-1")} {
+		if !slices.Contains(rs.Sandbox.Filesystem.DenyWrite, p) {
+			t.Errorf("detached review worktree: denyWrite lacks %s: %v", p, rs.Sandbox.Filesystem.DenyWrite)
+		}
 	}
 
 	for name, profile := range map[string]string{

@@ -74,6 +74,7 @@ type plan struct {
 	deny                                               []string // with the level's defaults (guard.DenyGlobs)
 	guard                                              guard.Level
 	reviewProfile                                      string
+	push                                               string // the project's push policy
 	title, body, extraPrompt                           string
 	token                                              string // OTAG_RUN_TOKEN; the row keeps its hash
 	reviewOf                                           string // a review run: the reviewed task
@@ -83,6 +84,18 @@ type plan struct {
 	// nil when there are none; the launch settles them.
 	messages *msg.Attempt
 	prior    *prior // the task's previous attempt (retries, fallbacks), nil for the first run
+	// reopened is the reason the task was reopened before its first run (a task done by
+	// hand); with an earlier run it is in prior.
+	reopened string
+	// The worktree (mode worktree): branch is the task's stored branch, else
+	// <branch_prefix><task> (knownBranch: it was stored); base is the ref a new branch
+	// starts from (the task's override, else the project's).
+	branch, base string
+	knownBranch  bool
+	// A review run inspects the reviewed task's head in a detached worktree:
+	// reviewHead is that commit, reviewBase the reviewed branch's base, reviewBranch
+	// the reviewed branch (its tip is the head when no done run recorded one).
+	reviewHead, reviewBase, reviewBranch string
 }
 
 type revision struct {
@@ -149,11 +162,13 @@ func (m *Manager) loadProject(ctx context.Context, tx *sql.Tx, projectID int64, 
 	var proj registry.ProjectRow
 	var deny string
 	err := tx.QueryRowContext(ctx, `
-SELECT pr.name, pr.path, pr.workspace_mode, pr.deny, pr.guard, coalesce(c.name, ''), coalesce(d.name, ''), coalesce(rv.name, '')
+SELECT pr.name, pr.path, pr.workspace_mode, pr.deny, pr.guard, coalesce(c.name, ''), coalesce(d.name, ''), coalesce(rv.name, ''),
+       pr.base, pr.branch_prefix, pr.remote, pr.push
 FROM projects pr LEFT JOIN profiles d ON d.id = pr.default_profile_id LEFT JOIN profiles rv ON rv.id = pr.review_profile_id
 LEFT JOIN profiles c ON c.id = pr.coordinator_profile_id
 WHERE pr.id = ? AND pr.retired_at IS NULL`, projectID).Scan(&proj.Name, &proj.Path, &proj.WorkspaceMode, &deny,
-		&proj.Guard, &proj.CoordinatorProfile, &proj.DefaultProfile, &proj.ReviewProfile)
+		&proj.Guard, &proj.CoordinatorProfile, &proj.DefaultProfile, &proj.ReviewProfile, &proj.Base, &proj.BranchPrefix,
+		&proj.Remote, &proj.Push)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, apperr.New(apperr.InvalidTransition, "project %d is retired", projectID)
 	}
@@ -169,6 +184,7 @@ WHERE pr.id = ? AND pr.retired_at IS NULL`, projectID).Scan(&proj.Name, &proj.Pa
 	p.guard = guard.Level(proj.Guard)
 	p.deny = guard.DenyGlobs(p.guard, p.deny)
 	p.project, p.projectPath, p.mode, p.reviewProfile = proj.Name, proj.Path, proj.WorkspaceMode, proj.ReviewProfile
+	p.push = proj.Push
 	return &proj, nil
 }
 
@@ -304,6 +320,9 @@ func (m *Manager) create(ctx context.Context, in StartInput) (*plan, adapter.Ada
 		if rs != nil {
 			p.role, p.resumeSID, p.resumeOf = rs.prev.Role, rs.prev.Session.HarnessSessionID, rs.prev.ID
 		}
+		if err := p.planWorktree(ctx, tx, t, proj); err != nil {
+			return err
+		}
 		var hash string
 		if p.token, hash, err = newToken(); err != nil {
 			return err
@@ -349,12 +368,64 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?)`,
 				return err
 			}
 		}
+		if rs == nil && !prev.Valid {
+			if p.reopened, err = task.ReopenReason(ctx, tx, t.ID, ""); err != nil {
+				return err
+			}
+		}
 		return nil
 	})
 	if err != nil {
 		return nil, nil, err
 	}
 	return &p, ad, nil
+}
+
+// planWorktree fills the worktree part of p for task t (mode worktree): the task's
+// stored branch (else <branch_prefix><task>) and base for a child; for a review run the
+// commit it inspects (detached), unless the review task already has a branch of its
+// own (created before review worktrees were detached), which it keeps.
+func (p *plan) planWorktree(ctx context.Context, tx *sql.Tx, t *task.Task, proj *registry.ProjectRow) error {
+	if proj.WorkspaceMode != workspace.Worktree {
+		return nil
+	}
+	if p.role == "review" && p.reviewOf != "" && t.Branch == "" {
+		rt, err := task.Get(ctx, tx, p.reviewOf)
+		if err != nil {
+			return err
+		}
+		p.reviewBranch = rt.Branch
+		var data string
+		err = tx.QueryRowContext(ctx, `SELECT o.value, o.data FROM run_outputs o JOIN runs r ON r.id = o.run_id
+			WHERE r.task_id = ? AND r.status = 'ended' AND r.ended_reason = 'done' AND o.kind = 'commit'
+			ORDER BY r.attempt DESC, o.id DESC LIMIT 1`, rt.ID).Scan(&p.reviewHead, &data)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+		var c struct {
+			BaseSHA string `json:"base_sha"`
+			Branch  string `json:"branch"`
+		}
+		_ = json.Unmarshal([]byte(data), &c)
+		p.reviewBase = c.BaseSHA
+		if c.Branch != "" {
+			p.reviewBranch = c.Branch
+		}
+		if p.reviewHead == "" && p.reviewBranch == "" {
+			return apperr.New(apperr.InvalidTransition, "review task %s: task %s has no recorded head commit or branch "+
+				"to review", t.ID, rt.ID)
+		}
+		return nil
+	}
+	p.branch, p.knownBranch = t.Branch, t.Branch != ""
+	if p.branch == "" {
+		p.branch = workspace.BranchFor(proj.BranchPrefix, t.ID)
+	}
+	p.base = t.Base
+	if p.base == "" {
+		p.base = proj.Base
+	}
+	return nil
 }
 
 // errCleanupPending: an earlier run of the workspace ended after Start cleared it, and

@@ -69,6 +69,10 @@ type ProjectRow struct {
 	WorkspaceMode      string   `json:"workspace_mode"`
 	Deny               []string `json:"deny"`
 	Guard              string   `json:"guard"` // light | strict
+	Base               string   `json:"base"`  // "" = the project's HEAD
+	BranchPrefix       string   `json:"branch_prefix"`
+	Remote             string   `json:"remote"` // "" = the base's remote, else origin
+	Push               string   `json:"push"`   // none | coordinator | child
 }
 
 // ListProjects returns active projects ordered by name.
@@ -76,7 +80,7 @@ func ListProjects(ctx context.Context, q db.Querier) ([]ProjectRow, error) {
 	rows, err := q.QueryContext(ctx, `
 SELECT pr.id, pr.name, pr.path, pr.prefix,
        coalesce(c.name, ''), coalesce(d.name, ''), coalesce(r.name, ''),
-       pr.workspace_mode, pr.deny, pr.guard
+       pr.workspace_mode, pr.deny, pr.guard, pr.base, pr.branch_prefix, pr.remote, pr.push
 FROM projects pr
 LEFT JOIN profiles c ON c.id = pr.coordinator_profile_id
 LEFT JOIN profiles d ON d.id = pr.default_profile_id
@@ -92,8 +96,7 @@ ORDER BY pr.name`)
 		var p ProjectRow
 		var deny string
 		if err := rows.Scan(&p.ID, &p.Name, &p.Path, &p.Prefix, &p.CoordinatorProfile, &p.DefaultProfile,
-			&p.ReviewProfile, &p.WorkspaceMode, &deny, &p.Guard); err != nil {
-
+			&p.ReviewProfile, &p.WorkspaceMode, &deny, &p.Guard, &p.Base, &p.BranchPrefix, &p.Remote, &p.Push); err != nil {
 			return nil, err
 		}
 		if err := json.Unmarshal([]byte(deny), &p.Deny); err != nil {

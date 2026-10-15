@@ -116,7 +116,7 @@ func TestDeliverRunFlow(t *testing.T) {
 	if code != 0 || json.Unmarshal(e.Data, &in) != nil || len(in.Messages) != 1 {
 		t.Fatalf("inbox: %d %s", code, e.Data)
 	}
-	if b := in.Messages[0].Body; !strings.Contains(b, "Task "+id+" is done") || !strings.Contains(b, "Branch: otag/"+id+", 1 commit(s)") ||
+	if b := in.Messages[0].Body; !strings.Contains(b, "Task "+id+" is done") || !strings.Contains(b, "Branch: feature/"+id+", 1 commit(s)") ||
 		!strings.Contains(b, "Summary: did the thing") {
 		t.Fatalf("notice:\n%s", b)
 	}
@@ -127,7 +127,7 @@ func TestDeliverRunFlow(t *testing.T) {
 		t.Fatalf("deliver: exit %d\n%s", code, out)
 	}
 	for _, want := range []string{"delivered " + id, "worktree " + wt + ": removed",
-		"branch otag/" + id + ": kept (1 commit(s) not in main)", "warning: branch otag/" + id + " has 1 commit(s) that main does not contain"} {
+		"branch feature/" + id + ": kept (1 commit(s) not in main)", "warning: branch feature/" + id + " has 1 commit(s) that main does not contain"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output lacks %q:\n%s", want, out)
 		}
@@ -135,13 +135,13 @@ func TestDeliverRunFlow(t *testing.T) {
 	if _, err := os.Stat(wt); !os.IsNotExist(err) {
 		t.Fatal("worktree left")
 	}
-	gitIn(t, h.repo, "merge", "-q", "--no-ff", "-m", "merge", "otag/"+id)
+	gitIn(t, h.repo, "merge", "-q", "--no-ff", "-m", "merge", "feature/"+id)
 	code, e = h.json("task", "deliver", id, "--delete-branch")
 	var res run.DeliverResult
 	if code != 0 || json.Unmarshal(e.Data, &res) != nil || res.Delivered || len(res.Branches) != 1 || !res.Branches[0].Deleted {
 		t.Fatalf("delete branch: %d %s", code, e.Data)
 	}
-	if out := gitIn(t, h.repo, "branch", "--list", "otag/"+id); out != "" {
+	if out := gitIn(t, h.repo, "branch", "--list", "feature/"+id); out != "" {
 		t.Fatalf("branch left: %q", out)
 	}
 }

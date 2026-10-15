@@ -151,6 +151,9 @@ func (m *Manager) complete(ctx context.Context, tx *sql.Tx, r *Run, h head, summ
 		row.ProjectID).Scan(&prefix, &reviewProfile); err != nil {
 		return nil, err
 	}
+	if reviewProfile, err = taskReviewProfile(ctx, tx, t, reviewProfile); err != nil {
+		return nil, err
+	}
 	if isReview(r, t) {
 		reviewProfile = "" // a review is never reviewed again
 	}
@@ -175,6 +178,28 @@ func (m *Manager) complete(ctx context.Context, tx *sql.Tx, r *Run, h head, summ
 	}
 	res.ReviewTask = rt.ID
 	return res, nil
+}
+
+// taskReviewProfile is the review profile of task t: its override (`--review`), else
+// projectProfile (the project's review_profile). --review none disables review; an
+// override whose profile was retired falls back to the project's, like a retired
+// project review profile disables review.
+func taskReviewProfile(ctx context.Context, tx *sql.Tx, t *task.Task, projectProfile string) (string, error) {
+	switch t.Review {
+	case "":
+		return projectProfile, nil
+	case task.ReviewNone:
+		return "", nil
+	}
+	var n int
+	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM profiles WHERE name = ? AND retired_at IS NULL`, t.Review).
+		Scan(&n); err != nil {
+		return "", err
+	}
+	if n == 0 {
+		return projectProfile, nil
+	}
+	return t.Review, nil
 }
 
 // isReview reports whether run r reviews another task: its role, or its task's
@@ -212,11 +237,17 @@ func reviewBody(t *task.Task, r *Run, h head, summary string) string {
 	fmt.Fprintf(&b, "Review the result of run %s for task %s (%s).\n\n", r.ID, t.ID, t.Title)
 	if w := r.Workspace; w != nil {
 		if w.Branch != "" {
-			fmt.Fprintf(&b, "Branch: %s (base %s, head %s, %d commit(s))\n", w.Branch, w.BaseSHA, h.sha, h.ahead)
+			fmt.Fprintf(&b, "Branch: %s (%d commit(s))\nBase: %s\nHead: %s\n", w.Branch, h.ahead, w.BaseSHA, h.sha)
+			if w.BaseSHA != "" && h.sha != "" {
+				fmt.Fprintf(&b, "Diff: git diff %s...%s\n", w.BaseSHA, h.sha)
+			}
 		} else {
 			fmt.Fprintf(&b, "Head: %s\n", h.sha)
 		}
 		fmt.Fprintf(&b, "Workspace: %s\n", w.Path)
+		if w.Mode == workspace.Worktree && h.sha != "" {
+			b.WriteString("Your review worktree is a detached checkout of the head commit.\n")
+		}
 	}
 	fmt.Fprintf(&b, "\nSummary from the agent:\n%s\n", summary)
 	if h.dirty {

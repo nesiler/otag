@@ -4,10 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 
 	"github.com/nesiler/otag/internal/apperr"
 	"github.com/nesiler/otag/internal/db"
 	"github.com/nesiler/otag/internal/guard"
+	"github.com/nesiler/otag/internal/registry"
 	"github.com/nesiler/otag/internal/task"
 	"github.com/nesiler/otag/internal/workspace"
 )
@@ -51,8 +53,8 @@ func TaskMe(ctx context.Context, q db.Querier, runID string) (*Me, error) {
 	if err != nil {
 		return nil, err
 	}
-	var deny string
-	if err := q.QueryRowContext(ctx, `SELECT deny FROM projects WHERE id = ?`, r.ProjectID).Scan(&deny); err != nil {
+	var deny, push string
+	if err := q.QueryRowContext(ctx, `SELECT deny, push FROM projects WHERE id = ?`, r.ProjectID).Scan(&deny, &push); err != nil {
 		return nil, err
 	}
 	var denyList []string
@@ -64,5 +66,25 @@ func TaskMe(ctx context.Context, q db.Querier, runID string) (*Me, error) {
 	} else {
 		me.Rules = Rules(workspace.Same, "your workspace", "", denyList)
 	}
+	if childPushes(push, r.Role, t.Branch) {
+		me.Rules = append(me.Rules[:len(me.Rules)-1], pushRule(t.ID), me.Rules[len(me.Rules)-1])
+		me.Commands = append(append([]Command{}, ChildCommands...), pushCommand(t.ID))
+	}
 	return me, nil
+}
+
+// childPushes reports whether a run of role may push its task branch itself: the
+// project's push is "child", the run is a child (not a review) and the task has a
+// branch.
+func childPushes(push, role, branch string) bool {
+	return push == registry.PushChild && role == "child" && branch != ""
+}
+
+// pushRule is the rule of a child that may push its own branch (push = "child").
+func pushRule(taskID string) string {
+	return fmt.Sprintf("The project lets you push your branch: commit, then run `otag task push %s` (never git push).", taskID)
+}
+
+func pushCommand(taskID string) Command {
+	return Command{"otag task push " + taskID, "push your branch to the project's remote (push = child)"}
 }

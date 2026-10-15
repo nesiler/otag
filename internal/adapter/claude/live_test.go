@@ -234,7 +234,7 @@ model = %q
 	if r.TaskStatus != "done" {
 		t.Errorf("task status %q", r.TaskStatus)
 	}
-	branch := "otag/" + task.ID
+	branch := "feature/" + task.ID
 	if log := git(repo, "log", "--format=%s", "main.."+branch); !strings.Contains(log, "hello") {
 		t.Errorf("no commit on %s: %q", branch, log)
 	}

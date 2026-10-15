@@ -174,13 +174,17 @@ func coordPrompts(p *plan) (prompt, instructions string) {
 // instructions and `otag prime`.
 func coordGuide() []string {
 	return []string{
-		"Plan work as tasks: `otag task add \"title\" --body \"...\"`; start one with `otag run start <task> --no-attach` " +
-			"(each child works in its own git worktree, branch otag/<task>).",
+		"Plan work as tasks: `otag task add \"title\" --body \"...\" [--base <ref>] [--review <profile|none>]`; start one " +
+			"with `otag run start <task> --no-attach` (each child works in its own git worktree on branch " +
+			"<branch_prefix><task>, from the project's base unless --base says otherwise).",
 		"Follow up with `otag status`, `otag needs` and `otag inbox`; answer a question with `otag reply <msg-id> \"answer\"`; " +
 			"message a run with `otag send <run|task> \"text\"`.",
 		"Children report with `otag done \"summary\"`; review a result with `otag review <task> --accept|--reject \"reason\"`.",
 		"A done task is ready to deliver (`otag task list --deliverable`; you get a message for each). otag never merges: " +
 			"deliver it as the project does, then `otag task deliver <task> [--delete-branch]` removes its worktree.",
-		"Never push or force anything. Ask the human (`otag send human \"...\"`) before merging or deleting work.",
+		"Merge/pull requests: `otag task push <task> [--force]` pushes the task branch when the project's push setting " +
+			"allows it; open the MR/PR with the forge's CLI (glab mr create, gh pr create). Review feedback or red CI: " +
+			"`otag task reopen <task> \"reason\"` sends it back to ready on the same branch; the next run gets the reason.",
+		"Never run git push or force anything yourself. Ask the human (`otag send human \"...\"`) before merging or deleting work.",
 	}
 }

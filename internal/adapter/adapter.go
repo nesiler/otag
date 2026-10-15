@@ -202,7 +202,7 @@ type RunSpec struct {
 
 	Workdir     string // agent cwd: the task worktree, or the project path in "same" mode
 	ProjectPath string // the registered repository
-	Branch      string // otag/<task> in worktree mode, "" in same mode
+	Branch      string // the task branch in worktree mode; "" in same mode or a detached review worktree
 	RunDir      string // private per-run dir (0700) for LaunchSpec.Files
 	CacheDir    string // per-harness cache dir, shared across runs
 	OtagBin     string // absolute path of otag; use it in hook commands
@@ -320,7 +320,7 @@ type HookContext struct {
 	Role    string // child | coordinator | review
 	Status  string // run status
 	Workdir string
-	Branch  string // the run's branch (otag/<task>), "" in same mode
+	Branch  string // the run's branch; "" in same mode or a detached review worktree
 	Deny    []string
 	Guard   guard.Level // the level the run started with ("" = strict)
 	// DB, TmuxSocket and OtagBin are otag's own database, tmux socket name and binary,

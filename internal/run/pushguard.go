@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"strconv"
 	"time"
+
+	"github.com/nesiler/otag/internal/workspace"
 )
 
 // pushBlock is git config, given through the environment, that makes every push of a
@@ -14,11 +16,9 @@ import (
 // scheme may never be used. Fetch URLs are not rewritten. It is a backstop behind the
 // guard (both levels), not a boundary: an explicit remote.<name>.pushurl, or a longer
 // matching pushInsteadOf in the user's config, wins over it. No hook and no
-// core.hooksPath is set: the project's own hooks keep working.
-var pushBlock = [][2]string{
-	{"url.otag-blocked://.pushInsteadOf", ""},
-	{"protocol.otag-blocked.allow", "never"},
-}
+// core.hooksPath is set: the project's own hooks keep working. `otag task push`, the
+// only push otag makes, leaves it out of its own git (workspace.Push).
+var pushBlock = workspace.PushBlock
 
 // gitConfigEnvVersion is the first git that reads GIT_CONFIG_COUNT/KEY_n/VALUE_n.
 const gitConfigEnvVersion = 2031

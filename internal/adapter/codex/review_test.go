@@ -128,8 +128,10 @@ func TestReviewNativeRootsAndStableTrust(t *testing.T) {
 	own := filepath.Join(common, "worktrees", "worktree")
 	db := spec.Env["OTAG_DB"]
 	for path, want := range map[string]any{
-		filepath.Join(common, "objects"): "write", filepath.Join(common, "refs"): "write", filepath.Join(common, "logs"): "write",
-		filepath.Join(common, "packed-refs"): "write", own: "write", db: "write", db + "-wal": "write", db + "-shm": "write",
+		// A linked worktree without a branch of its own is a detached review checkout:
+		// a commit there writes objects and its own HEAD, never a ref.
+		filepath.Join(common, "objects"): "write", filepath.Join(common, "refs"): nil, filepath.Join(common, "logs"): nil,
+		filepath.Join(common, "packed-refs"): nil, own: "write", db: "write", db + "-wal": "write", db + "-shm": "write",
 		// The coordinator's unsandboxed git must not run agent-written config or hooks.
 		common: nil, filepath.Join(common, "config"): nil, filepath.Join(common, "hooks"): nil,
 		filepath.Join(own, "commondir"): "read", filepath.Join(own, "gitdir"): "read", filepath.Join(own, "config.worktree"): "read",

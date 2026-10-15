@@ -27,8 +27,9 @@ import (
 // NotifyDone tells the project's coordinator (the human while none is live) that task
 // taskID is done and ready to deliver: an info message with its branch, the commits
 // since its base and its run's summary. It runs in the caller's transaction, the one
-// that moved the task to done, and sends at most one message per task (client_msg_id
-// done:<task>). A review task gets none: the task it reviews is the one to deliver.
+// that moved the task to done, and sends at most one message per time the task is done
+// (client_msg_id done:<task>, then done:<task>:<n> for the n-th done after a reopen).
+// A review task gets none: the task it reviews is the one to deliver.
 func NotifyDone(ctx context.Context, tx *sql.Tx, taskID string, a Actor) error {
 	t, err := task.Get(ctx, tx, taskID)
 	if err != nil {
@@ -42,7 +43,10 @@ func NotifyDone(ctx context.Context, tx *sql.Tx, taskID string, a Actor) error {
 			return nil
 		}
 	}
-	clientID := "done:" + t.ID
+	clientID, err := doneNoticeID(ctx, tx, t.ID)
+	if err != nil {
+		return err
+	}
 	var sent int
 	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM messages WHERE client_msg_id = ?`, clientID).Scan(&sent); err != nil {
 		return err
@@ -58,6 +62,20 @@ func NotifyDone(ctx context.Context, tx *sql.Tx, taskID string, a Actor) error {
 		From: msg.Sender{Kind: msg.SenderSystem, Actor: "otag"}, TaskID: t.ID, Body: body,
 		To: []msg.Recipient{{Kind: msg.ToRole, Ref: msg.RoleCoordinator}}}, msgActor(a))
 	return err
+}
+
+// doneNoticeID is the client_msg_id of the task's current done notice: done:<task>
+// before any reopen, done:<task>:<n+1> after n reopens.
+func doneNoticeID(ctx context.Context, q db.Querier, taskID string) (string, error) {
+	var reopens int
+	if err := q.QueryRowContext(ctx, `SELECT count(*) FROM events WHERE task_id = ? AND kind = 'task.reopened'`, taskID).
+		Scan(&reopens); err != nil {
+		return "", err
+	}
+	if reopens == 0 {
+		return "done:" + taskID, nil
+	}
+	return fmt.Sprintf("done:%s:%d", taskID, reopens+1), nil
 }
 
 // maxNoticeSummary bounds the summary a done notice quotes (a message is at most
@@ -125,7 +143,7 @@ ORDER BY r.attempt DESC LIMIT 1`, t.ID).Scan(&runID, &summary, &head, &data)
 	}
 	var reviewer, verdict, reason string
 	err = q.QueryRowContext(ctx, `SELECT coalesce(reviewer_run_id, reviewer_actor), verdict, reason FROM reviews
-		WHERE reviewed_task_id = ? ORDER BY id DESC LIMIT 1`, t.ID).Scan(&reviewer, &verdict, &reason)
+		WHERE reviewed_task_id = ? AND stale_at IS NULL ORDER BY id DESC LIMIT 1`, t.ID).Scan(&reviewer, &verdict, &reason)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return "", err
 	}
@@ -135,6 +153,9 @@ ORDER BY r.attempt DESC LIMIT 1`, t.ID).Scan(&runID, &summary, &head, &data)
 			fmt.Fprintf(&b, ": %s", clip(reason, maxNoticeSummary))
 		}
 		b.WriteString("\n")
+	}
+	if t.Push != nil {
+		fmt.Fprintf(&b, "Pushed: %s to %s/%s\n", short(t.Push.SHA), t.Push.Remote, t.Push.Branch)
 	}
 	if branch != "" {
 		fmt.Fprintf(&b, "Once it is delivered (merged), run: otag task deliver %s [--delete-branch]\n", t.ID)
@@ -149,9 +170,12 @@ type DeliverInput struct {
 	Task string
 	Note string // kept as the status reason and on the task.delivered event
 	// DeleteBranch deletes the task's branch when the default branch contains it
-	// (`git branch -d` semantics); an unmerged branch is kept with a warning.
+	// (`git branch -d` semantics); an unmerged branch is kept with a warning, unless
+	// Force (`git branch -D`: a squash merge never contains the branch).
 	DeleteBranch bool
-	Force        bool // remove worktrees even with uncommitted changes (they are lost)
+	// Force removes worktrees even with uncommitted changes (they are lost) and, with
+	// DeleteBranch, deletes an unmerged branch.
+	Force bool
 }
 
 // DeliverResult reports `otag task deliver`.
@@ -234,9 +258,10 @@ func (m *Manager) DeliverTask(ctx context.Context, in DeliverInput) (*DeliverRes
 		return nil, err
 	}
 	root := filepath.Join(paths.DataDir(m.Getenv), "worktrees", project)
+	// Each worktree must still be on the branch it was created on ("" = a detached
+	// review checkout).
 	spec := func(w worktreeRow) workspace.RemoveSpec {
-		return workspace.RemoveSpec{ProjectPath: projectPath, Path: w.path, Branch: workspace.BranchFor(w.task), Root: root,
-			Force: in.Force}
+		return workspace.RemoveSpec{ProjectPath: projectPath, Path: w.path, Branch: w.branch, Root: root, Force: in.Force}
 	}
 	if err := m.worktreesFree(ctx, m.DB, ids, wts); err != nil {
 		return nil, err
@@ -335,8 +360,8 @@ func (m *Manager) DeliverTask(ctx context.Context, in DeliverInput) (*DeliverRes
 		} else {
 			c.Result = got
 			if got == workspace.Replaced {
-				res.Warnings = append(res.Warnings, fmt.Sprintf("%s is another worktree now (not on %s); left alone",
-					w.path, workspace.BranchFor(w.task)))
+				res.Warnings = append(res.Warnings, fmt.Sprintf("%s is another worktree now (not %s); left alone",
+					w.path, onBranch(w.branch)))
 			}
 			if err := m.recordCleaned(ctx, t.ProjectID, w, in.Force, got); err != nil {
 				return nil, err
@@ -353,15 +378,25 @@ func (m *Manager) DeliverTask(ctx context.Context, in DeliverInput) (*DeliverRes
 			case !removed[b.Task]:
 				res.Warnings = append(res.Warnings, fmt.Sprintf("branch %s kept: its worktree is still there", b.Branch))
 				continue
+			case in.Force:
+				// --force deletes it unmerged too (a squash or rebase merge never makes the
+				// branch an ancestor of the target).
 			case res.Target == "" || b.Unmerged == nil:
-				res.Warnings = append(res.Warnings, fmt.Sprintf("branch %s kept: no default branch to check it is merged", b.Branch))
+				res.Warnings = append(res.Warnings, fmt.Sprintf("branch %s kept: no default branch to check it is merged "+
+					"(--force deletes it anyway)", b.Branch))
 				continue
 			case *b.Unmerged > 0:
-				res.Warnings = append(res.Warnings, fmt.Sprintf("branch %s kept: %d commit(s) not merged into %s",
-					b.Branch, *b.Unmerged, res.Target))
+				res.Warnings = append(res.Warnings, fmt.Sprintf("branch %s kept: %d commit(s) not merged into %s (a squash "+
+					"merge? --force deletes it anyway)", b.Branch, *b.Unmerged, res.Target))
 				continue
 			}
-			n, err := workspace.DeleteBranch(ctx, projectPath, b.Branch, res.Target)
+			var n int
+			var err error
+			if in.Force {
+				err = workspace.ForceDeleteBranch(ctx, projectPath, b.Branch)
+			} else {
+				n, err = workspace.DeleteBranch(ctx, projectPath, b.Branch, res.Target)
+			}
 			switch {
 			case err != nil:
 				res.Warnings = append(res.Warnings, fmt.Sprintf("branch %s kept: %s", b.Branch, oneLine(err.Error())))
@@ -371,8 +406,12 @@ func (m *Manager) DeliverTask(ctx context.Context, in DeliverInput) (*DeliverRes
 					b.Branch, n, res.Target))
 			default:
 				b.Deleted, b.Exists = true, false
+				if in.Force && (b.Unmerged == nil || *b.Unmerged > 0) {
+					res.Warnings = append(res.Warnings, fmt.Sprintf("branch %s deleted with --force although it is not "+
+						"merged into %s", b.Branch, or(res.Target, "a default branch")))
+				}
 				if err := m.recordEvent(ctx, t.ProjectID, b.Task, "task.branch_deleted",
-					map[string]any{"branch": b.Branch, "target": res.Target}); err != nil {
+					map[string]any{"branch": b.Branch, "target": res.Target, "forced": in.Force}); err != nil {
 					return nil, err
 				}
 			}
@@ -511,11 +550,23 @@ func openWorktrees(ctx context.Context, q db.Querier, ids []string) ([]worktreeR
 	return out, rows.Err()
 }
 
-// taskBranches lists the branches the tasks' workspaces were on, the first task's first.
+// onBranch describes the checkout a worktree is expected on.
+func onBranch(branch string) string {
+	if branch == "" {
+		return "a detached review checkout"
+	}
+	return "on " + branch
+}
+
+// taskBranches lists the stored branches of the tasks (tasks.branch, else the branch
+// of their first worktree; a detached review checkout has none), the first task's
+// first.
 func taskBranches(ctx context.Context, q db.Querier, ids []string) ([]worktreeRow, error) {
-	rows, err := q.QueryContext(ctx, `SELECT task_id, branch FROM workspaces
-		WHERE task_id IN (`+marks(len(ids))+`) AND mode = 'worktree' AND branch IS NOT NULL
-		GROUP BY task_id, branch ORDER BY task_id <> ?, min(id)`, append(anys(ids), ids[0])...)
+	rows, err := q.QueryContext(ctx, `SELECT id, b FROM (
+		SELECT t.id, coalesce(t.branch, (SELECT w.branch FROM workspaces w WHERE w.task_id = t.id AND w.mode = 'worktree'
+			AND w.branch IS NOT NULL ORDER BY w.id LIMIT 1)) AS b
+		FROM tasks t WHERE t.id IN (`+marks(len(ids))+`))
+		WHERE b IS NOT NULL ORDER BY id <> ?, id`, append(anys(ids), ids[0])...)
 	if err != nil {
 		return nil, err
 	}
@@ -558,6 +609,13 @@ func recordTaskEvent(ctx context.Context, tx *sql.Tx, a Actor, projectID int64, 
 }
 
 func marks(n int) string { return "?" + strings.Repeat(", ?", n-1) }
+
+func or(s, def string) string {
+	if s == "" {
+		return def
+	}
+	return s
+}
 
 func anys(ss []string) []any {
 	out := make([]any, len(ss))

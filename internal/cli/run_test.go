@@ -262,7 +262,7 @@ func TestRunFlowAutonomous(t *testing.T) {
 	}
 
 	wt := filepath.Join(h.env["OTAG_DATA_DIR"], "worktrees", "alpha", id)
-	if r.Workspace == nil || r.Workspace.Path != wt || r.Workspace.Branch != "otag/"+id || r.Workspace.Status != "kept" {
+	if r.Workspace == nil || r.Workspace.Path != wt || r.Workspace.Branch != "feature/"+id || r.Workspace.Status != "kept" {
 		t.Fatalf("workspace: %+v", r.Workspace)
 	}
 	head := gitIn(t, wt, "rev-parse", "HEAD")
@@ -285,7 +285,7 @@ func TestRunFlowAutonomous(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(h.repo, "fake.txt")); err == nil {
 		t.Fatal("fake.txt written into the project")
 	}
-	if gitIn(t, h.repo, "rev-parse", "otag/"+id) != head {
+	if gitIn(t, h.repo, "rev-parse", "feature/"+id) != head {
 		t.Fatal("branch not at worktree HEAD")
 	}
 

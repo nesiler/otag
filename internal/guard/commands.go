@@ -212,9 +212,10 @@ func (p Policy) checkTmux(args []string) Decision {
 // childCommands are the otag commands a child may run: its own run's commands and
 // read-only views ("cmd" or "cmd sub"). send and reply are open here; the CLI limits
 // them to the child's scope (send only to coord, reply only to messages for its run or
-// task), verified with the run token; review only for a review run (run.Review).
+// task), verified with the run token; review only for a review run (run.Review); task
+// push only for the run's own task in a project with push = "child" (run.PushTask).
 var childCommands = []string{"done", "fail", "ask", "inbox", "reply", "send", "review", "prime", "context", "status", "profiles", "version",
-	"help", "task me", "task list", "task show", "run list", "run show", "notify list"}
+	"help", "task me", "task list", "task show", "task push", "run list", "run show", "notify list"}
 
 // IsChildCommand reports whether `otag <cmd> [<sub>]` is open to a child (the CLI
 // enforces the same list itself, for commands no shell line shows).
@@ -345,7 +346,7 @@ func (p Policy) gitPath(dir, v, what string) Decision {
 	return allow
 }
 
-const pushDenied = "git push is not allowed; commit and run `otag done`, the coordinator merges"
+const pushDenied = "git push is not allowed for agents; commit and run `otag done`. Where the project allows it (push setting), `otag task push <task>` pushes a task branch"
 
 // checkGit refuses pushes, aliases, git pointed outside the workspace and changes to
 // refs other than the run's own branch. A light run leaves aliases, config and the

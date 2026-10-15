@@ -21,6 +21,7 @@ import (
 	"github.com/nesiler/otag/internal/apperr"
 	"github.com/nesiler/otag/internal/guard"
 	"github.com/nesiler/otag/internal/paths"
+	"github.com/nesiler/otag/internal/workspace"
 )
 
 // Harnesses supported by otag.
@@ -29,6 +30,16 @@ var Harnesses = []string{"claude", "codex", "opencode"}
 // FakeHarness is the scripted test/demo harness (internal/adapter/fake). It is valid in
 // the registry but is not a CLI that doctor looks for.
 const FakeHarness = "fake"
+
+// Push policies (projects.push): who may run `otag task push`.
+const (
+	PushNone        = "none"        // nobody: otag never pushes
+	PushCoordinator = "coordinator" // the project's coordinator and the human (default)
+	PushChild       = "child"       // also the task's own child run
+)
+
+// PushPolicies lists the push values.
+var PushPolicies = []string{PushNone, PushCoordinator, PushChild}
 
 // ValidHarness reports whether h may be used by an account.
 func ValidHarness(h string) bool { return h == FakeHarness || slices.Contains(Harnesses, h) }
@@ -90,6 +101,18 @@ type Project struct {
 	// Guard is the guard level of the project's runs: light (default) | strict
 	// (internal/guard, docs/ADAPTERS.md "Threat model").
 	Guard string `toml:"guard"`
+	// Base is the ref new task branches start from ("" = the project's HEAD); a
+	// remote-tracking ref (origin/dev) is fetched first.
+	Base string `toml:"base"`
+	// BranchPrefix starts every new task branch: <branch_prefix><task>. Unset:
+	// workspace.DefaultBranchPrefix; "" is allowed (the task id alone).
+	BranchPrefix string `toml:"branch_prefix"`
+	// Remote is where `otag task push` pushes ("" = the remote of a remote-tracking
+	// base, else origin).
+	Remote string `toml:"remote"`
+	// Push is who may run `otag task push`: none | coordinator (default; and the
+	// human) | child (also the task's own run).
+	Push string `toml:"push"`
 	// Raw holds every key of the file, including extra ones, for the config column.
 	Raw  map[string]any `toml:"-"`
 	File string         `toml:"-"`
@@ -219,7 +242,14 @@ func (c *Config) normalize(getenv paths.Getenv) {
 		if p.Raw == nil {
 			p.Raw = map[string]any{}
 		}
+		if _, set := p.Raw["branch_prefix"]; !set {
+			p.BranchPrefix = workspace.DefaultBranchPrefix
+		}
+		if p.Push == "" {
+			p.Push = PushCoordinator
+		}
 		p.Raw["name"], p.Raw["path"], p.Raw["workspace"], p.Raw["guard"] = p.Name, p.Path, p.Workspace, p.Guard
+		p.Raw["branch_prefix"], p.Raw["push"] = p.BranchPrefix, p.Push
 		if st, err := os.Stat(p.Path); err != nil || !st.IsDir() {
 			c.Warnings = append(c.Warnings, fmt.Sprintf("project %s: path %s is not a directory", p.Name, p.Path))
 		}
@@ -306,6 +336,20 @@ func (c *Config) Validate() error {
 		}
 		if !slices.Contains(guard.Levels, p.Guard) {
 			bad("%s: guard %q must be %s", where, p.Guard, strings.Join(guard.Levels, "|"))
+		}
+		if err := workspace.CheckBranchPrefix(p.BranchPrefix); err != nil {
+			bad("%s: branch_prefix: %v", where, err)
+		}
+		if p.Base != "" {
+			if err := workspace.CheckRef(p.Base); err != nil {
+				bad("%s: base: %v", where, err)
+			}
+		}
+		if p.Remote != "" && (workspace.CheckRef(p.Remote) != nil || strings.Contains(p.Remote, "/")) {
+			bad("%s: remote %q is not a remote name", where, p.Remote)
+		}
+		if !slices.Contains(PushPolicies, p.Push) {
+			bad("%s: push %q must be %s", where, p.Push, strings.Join(PushPolicies, "|"))
 		}
 		for field, ref := range map[string]string{
 			"coordinator_profile": p.CoordinatorProfile,

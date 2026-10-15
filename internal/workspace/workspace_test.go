@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -32,7 +33,7 @@ func TestWorktreeCreateReuse(t *testing.T) {
 	ctx := context.Background()
 	repo := initRepo(t)
 	path := filepath.Join(t.TempDir(), "wt", "p", "p-1")
-	spec := Spec{Mode: Worktree, ProjectPath: repo, Path: path, Branch: BranchFor("p-1")}
+	spec := Spec{Mode: Worktree, ProjectPath: repo, Path: path, Branch: BranchFor("otag/", "p-1")}
 	r, err := Prepare(ctx, spec)
 	if err != nil {
 		t.Fatal(err)
@@ -65,8 +66,13 @@ func TestWorktreeCreateReuse(t *testing.T) {
 	if err != nil || !r2.Reused {
 		t.Fatalf("reuse: %+v %v", r2, err)
 	}
-	// Deleted by hand: recreated from the surviving branch.
+	// Deleted by hand: recreated from the surviving branch, which the task recorded as
+	// its own (a branch it never had is refused).
 	_ = os.RemoveAll(path)
+	if _, err := Prepare(ctx, spec); err == nil || !strings.Contains(err.Error(), "not this task's") {
+		t.Fatalf("an unrecorded existing branch taken over: %v", err)
+	}
+	spec.Known = true
 	r3, err := Prepare(ctx, spec)
 	if err != nil || r3.Reused {
 		t.Fatalf("recreate: %+v %v", r3, err)

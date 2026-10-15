@@ -38,7 +38,8 @@ type Policy struct {
 	// Workdir). "" means Workdir. It never moves the boundary:
 	// writes must still stay inside Workdir. CheckCommand follows `cd` within a line.
 	Cwd string
-	// Branch is the run's own branch (otag/<task>); "" in same mode. Only it may be
+	// Branch is the run's own branch; "" in same mode or a detached review worktree (then
+	// no branch may be moved). Only it may be
 	// force-moved or deleted (`git branch -f/-D/-M`, `checkout -B`).
 	Branch string
 	// Level selects the rule set (level.go); "" is strict.

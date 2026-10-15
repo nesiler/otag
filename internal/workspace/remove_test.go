@@ -28,13 +28,13 @@ func TestRemoveWorktree(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "worktrees", "p")
 	prep := func(id string) string {
 		path := filepath.Join(root, id)
-		if _, err := Prepare(ctx, Spec{Mode: Worktree, ProjectPath: repo, Path: path, Branch: BranchFor(id)}); err != nil {
+		if _, err := Prepare(ctx, Spec{Mode: Worktree, ProjectPath: repo, Path: path, Branch: BranchFor("otag/", id)}); err != nil {
 			t.Fatal(err)
 		}
 		return path
 	}
 	spec := func(path, id string, force bool) RemoveSpec {
-		return RemoveSpec{ProjectPath: repo, Path: path, Branch: BranchFor(id), Root: root, Force: force}
+		return RemoveSpec{ProjectPath: repo, Path: path, Branch: BranchFor("otag/", id), Root: root, Force: force}
 	}
 	clean, dirty, gone := prep("p-1"), prep("p-2"), prep("p-3")
 	commitFile(t, clean, "a")

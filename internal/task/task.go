@@ -18,6 +18,7 @@ import (
 	"github.com/nesiler/otag/internal/apperr"
 	"github.com/nesiler/otag/internal/db"
 	"github.com/nesiler/otag/internal/event"
+	"github.com/nesiler/otag/internal/workspace"
 )
 
 // Task is a unit of work.
@@ -44,9 +45,31 @@ type Task struct {
 	CreatedBy       string          `json:"created_by"`
 	CreatedAt       string          `json:"created_at"`
 	UpdatedAt       string          `json:"updated_at"`
+	// Base overrides the project's base for this task ("" = the project's); frozen
+	// once the task has its worktree (Branch set).
+	Base string `json:"base"`
+	// Branch is the task's branch, stored when its worktree is first created and used
+	// from then on ("" = no worktree yet, or a same-mode project).
+	Branch string `json:"branch"`
+	// Review overrides the project's review_profile: "" = the project's, ReviewNone =
+	// no review, else a profile.
+	Review string `json:"review"`
+	// Push is the last `otag task push` (nil = never pushed).
+	Push *Push `json:"push"`
 	// Deps are edges from this task; Dependents are edges pointing at it. Filled by Get.
 	Deps       []Dep `json:"deps,omitempty"`
 	Dependents []Dep `json:"dependents,omitempty"`
+}
+
+// ReviewNone is the review override that disables review for a task.
+const ReviewNone = "none"
+
+// Push records the last push of a task branch (`otag task push`).
+type Push struct {
+	Remote string `json:"remote"`
+	Branch string `json:"branch"`
+	SHA    string `json:"sha"`
+	At     string `json:"at"`
 }
 
 // Dep is one dependency edge as seen from a task.
@@ -79,20 +102,28 @@ SELECT t.id, p.name, t.project_id, t.title, t.body, t.status, t.status_reason, t
        coalesce(pf.name, ''), coalesce(t.current_run_id, ''), t.version, coalesce(t.external_ref, ''),
        t.metadata, t.extra_prompt, coalesce(t.claimed_by, ''), coalesce(t.claimed_at, ''),
        t.status_changed_at, coalesce(t.closed_at, ''), coalesce(t.delivered_at, ''), t.created_by, t.created_at,
-       t.updated_at
+       t.updated_at, coalesce(t.base, ''), coalesce(t.branch, ''),
+       CASE WHEN t.review_none = 1 THEN 'none' ELSE coalesce(rv.name, '') END,
+       coalesce(t.push_remote, ''), coalesce(t.push_branch, ''), coalesce(t.push_sha, ''), coalesce(t.pushed_at, '')
 FROM %s t
 JOIN projects p ON p.id = t.project_id
-LEFT JOIN profiles pf ON pf.id = t.profile_id`
+LEFT JOIN profiles pf ON pf.id = t.profile_id
+LEFT JOIN profiles rv ON rv.id = t.review_profile_id`
 
 type scanner interface{ Scan(...any) error }
 
 func scanTask(s scanner) (*Task, error) {
 	var t Task
 	var meta string
+	var push Push
 	err := s.Scan(&t.ID, &t.Project, &t.ProjectID, &t.Title, &t.Body, &t.Status, &t.StatusReason, &t.Priority,
 		&t.Profile, &t.CurrentRunID, &t.Version, &t.ExternalRef, &meta, &t.ExtraPrompt, &t.ClaimedBy,
-		&t.ClaimedAt, &t.StatusChangedAt, &t.ClosedAt, &t.DeliveredAt, &t.CreatedBy, &t.CreatedAt, &t.UpdatedAt)
+		&t.ClaimedAt, &t.StatusChangedAt, &t.ClosedAt, &t.DeliveredAt, &t.CreatedBy, &t.CreatedAt, &t.UpdatedAt,
+		&t.Base, &t.Branch, &t.Review, &push.Remote, &push.Branch, &push.SHA, &push.At)
 	t.Metadata = json.RawMessage(meta)
+	if push.SHA != "" {
+		t.Push = &push
+	}
 	return &t, err
 }
 
@@ -218,6 +249,8 @@ type AddInput struct {
 	Metadata    json.RawMessage
 	ExtraPrompt string
 	Deps        []DepRef
+	Base        string // overrides the project's base ("" = the project's)
+	Review      string // "" = the project's review_profile, ReviewNone, or a profile
 }
 
 // Add creates a task in status ready (or draft) and records task.created.
@@ -236,6 +269,15 @@ func Add(ctx context.Context, tx *sql.Tx, in AddInput, actor Actor) (*Task, erro
 	if err != nil {
 		return nil, err
 	}
+	if in.Base != "" {
+		if err := workspace.CheckRef(in.Base); err != nil {
+			return nil, apperr.New(apperr.Invalid, "--base: %v", err)
+		}
+	}
+	reviewID, reviewNone, err := reviewOverride(ctx, tx, in.Review)
+	if err != nil {
+		return nil, err
+	}
 	id, err := newID(ctx, tx, in.Prefix)
 	if err != nil {
 		return nil, err
@@ -246,10 +288,10 @@ func Add(ctx context.Context, tx *sql.Tx, in AddInput, actor Actor) (*Task, erro
 	}
 	_, err = tx.ExecContext(ctx, `
 INSERT INTO tasks (id, project_id, title, body, status, priority, profile_id, external_ref, metadata,
-                   extra_prompt, created_by)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                   extra_prompt, created_by, base, review_profile_id, review_none)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		id, in.ProjectID, in.Title, in.Body, status, in.Priority, profileID, nullStr(in.ExternalRef),
-		meta, in.ExtraPrompt, actor.Name)
+		meta, in.ExtraPrompt, actor.Name, nullStr(in.Base), reviewID, reviewNone)
 	if err != nil {
 		return nil, err
 	}
@@ -266,16 +308,22 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 
 // EditInput lists optional changes; nil pointers are left untouched.
 type EditInput struct {
-	Title         *string
-	Body          *string
-	Priority      *int
-	Profile       *string
-	ExternalRef   *string
-	ExtraPrompt   *string
-	Metadata      json.RawMessage   // replaces the whole object
-	MetaSet       map[string]string // merged keys; values parsed as JSON when valid
-	AddDeps       []DepRef
-	RemoveDeps    []DepRef
+	Title       *string
+	Body        *string
+	Priority    *int
+	Profile     *string
+	ExternalRef *string
+	ExtraPrompt *string
+	Metadata    json.RawMessage   // replaces the whole object
+	MetaSet     map[string]string // merged keys; values parsed as JSON when valid
+	AddDeps     []DepRef
+	RemoveDeps  []DepRef
+	// Base ("" = the project's again) is refused once the task has its worktree: the
+	// branch already starts there.
+	Base *string
+	// Review: "" = the project's review_profile again, ReviewNone, or a profile. It
+	// applies the next time the task finishes.
+	Review        *string
 	ExpectVersion int64 // 0 = no check
 }
 
@@ -320,6 +368,26 @@ func Edit(ctx context.Context, tx *sql.Tx, id string, in EditInput, actor Actor)
 	}
 	if in.ExtraPrompt != nil {
 		set("extra_prompt", *in.ExtraPrompt)
+	}
+	if in.Base != nil && *in.Base != t.Base {
+		if t.Branch != "" {
+			return nil, apperr.New(apperr.InvalidTransition, "task %s already has its worktree on branch %s: its base "+
+				"(%s) is frozen, so --base is refused", id, t.Branch, or(t.Base, "the project's"))
+		}
+		if *in.Base != "" {
+			if err := workspace.CheckRef(*in.Base); err != nil {
+				return nil, apperr.New(apperr.Invalid, "--base: %v", err)
+			}
+		}
+		set("base", nullStr(*in.Base))
+	}
+	if in.Review != nil && *in.Review != t.Review {
+		rid, none, err := reviewOverride(ctx, tx, *in.Review)
+		if err != nil {
+			return nil, err
+		}
+		set("review_profile_id", rid)
+		set("review_none", none)
 	}
 	if in.Metadata != nil || len(in.MetaSet) > 0 {
 		base := t.Metadata
@@ -436,6 +504,126 @@ func Deliver(ctx context.Context, tx *sql.Tx, id, note string, expectVersion int
 		return nil, err
 	}
 	return Get(ctx, tx, id)
+}
+
+// Reopen moves a done task back to ready (compare-and-swap): the same worktree and
+// branch get another run. reason is required; it becomes the status reason and is
+// recorded on the task.reopened event with the task's latest run ("run"), which is the
+// run the next attempt follows, so its prior-attempt summary carries the reason.
+// closed_at is cleared (it is set again when the task is done again). A delivered task
+// is not reopened, nor is a review task (reopen the task it reviews). The caller
+// (run.Manager.Reopen) marks the task's reviews stale and retracts its done notice in
+// the same transaction.
+func Reopen(ctx context.Context, tx *sql.Tx, id, reason string, expectVersion int64, actor Actor) (*Task, error) {
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		return nil, apperr.New(apperr.Invalid, "a reopen needs a reason: otag task reopen <task> \"why\"")
+	}
+	t, err := Get(ctx, tx, id)
+	if err != nil {
+		return nil, err
+	}
+	if err := checkVersion(t, expectVersion); err != nil {
+		return nil, err
+	}
+	for _, d := range t.Deps {
+		if d.Kind == "review_of" {
+			return nil, apperr.New(apperr.InvalidTransition, "task %s is a review task; reopen the task it reviews (%s)",
+				id, d.TaskID)
+		}
+	}
+	switch t.Status {
+	case Done:
+	case Delivered:
+		return nil, apperr.New(apperr.InvalidTransition, "task %s is delivered; a delivered task cannot be reopened "+
+			"(add a new task for the follow-up work)", id)
+	default:
+		return nil, apperr.New(apperr.InvalidTransition, "task %s is %s; only a done task can be reopened", id, t.Status)
+	}
+	var live string
+	err = tx.QueryRowContext(ctx, `SELECT id FROM runs WHERE task_id = ? AND status <> 'ended' LIMIT 1`, id).Scan(&live)
+	if err == nil {
+		return nil, apperr.New(apperr.Conflict, "task %s has run %s that has not ended", id, live)
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+	var last sql.NullString
+	if err := tx.QueryRowContext(ctx, `SELECT id FROM runs WHERE task_id = ? ORDER BY attempt DESC LIMIT 1`, id).
+		Scan(&last); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+	res, err := tx.ExecContext(ctx, `UPDATE tasks SET status = 'ready', status_reason = ?, status_changed_at = ?,
+		closed_at = NULL, claimed_by = NULL, claimed_at = NULL, current_run_id = NULL, version = version + 1
+		WHERE id = ? AND version = ? AND status = 'done'`, "reopened: "+reason, db.Now(), id, t.Version)
+	if err := casResult(res, err, id); err != nil {
+		return nil, err
+	}
+	if err := record(ctx, tx, actor, "task.reopened", id, t.ProjectID, Done, Ready,
+		map[string]any{"reason": reason, "run": last.String}); err != nil {
+		return nil, err
+	}
+	return Get(ctx, tx, id)
+}
+
+// ReopenReason is the reason of the reopen the run after runID follows: the
+// task.reopened event that names runID as the task's latest run ("" = the task's
+// first run; "" result = none).
+func ReopenReason(ctx context.Context, q db.Querier, taskID, runID string) (string, error) {
+	var reason string
+	err := q.QueryRowContext(ctx, `SELECT coalesce(json_extract(data, '$.reason'), '') FROM events
+		WHERE task_id = ? AND kind = 'task.reopened' AND coalesce(json_extract(data, '$.run'), '') = ?
+		ORDER BY id DESC LIMIT 1`, taskID, runID).Scan(&reason)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return reason, err
+}
+
+// SetBranch stores the task's branch the first time its worktree is created; a task
+// that has one keeps it. It reports whether it stored it.
+func SetBranch(ctx context.Context, tx *sql.Tx, id, branch string) (bool, error) {
+	res, err := tx.ExecContext(ctx, `UPDATE tasks SET branch = ? WHERE id = ? AND branch IS NULL`, branch, id)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n == 1, err
+}
+
+// RecordPush stores a push of the task's branch and records task.pushed. prev is the
+// push record the pusher read before pushing: if another push was recorded meanwhile
+// it is a retryable CONFLICT and nothing is recorded (the remote has one of the two
+// commits; push again to record it).
+func RecordPush(ctx context.Context, tx *sql.Tx, id string, p Push, prev *Push, force bool, actor Actor) (*Task, error) {
+	t, err := Get(ctx, tx, id)
+	if err != nil {
+		return nil, err
+	}
+	if (t.Push == nil) != (prev == nil) || t.Push != nil && *t.Push != *prev {
+		return nil, apperr.Retryable(apperr.Conflict, "task %s: another push was recorded while this one ran; the remote has "+
+			"one of the two commits: run `otag task push %s` again to record it", id, id)
+	}
+	res, err := tx.ExecContext(ctx, `UPDATE tasks SET push_remote = ?, push_branch = ?, push_sha = ?, pushed_at = ?
+		WHERE id = ? AND coalesce(push_sha, '') = ?`, p.Remote, p.Branch, p.SHA, p.At, id, t.pushSHA())
+	if err := casResult(res, err, id); err != nil {
+		return nil, err
+	}
+	data := map[string]any{"remote": p.Remote, "branch": p.Branch, "sha": p.SHA, "force": force}
+	if prev != nil {
+		data["previous_sha"] = prev.SHA
+	}
+	if err := record(ctx, tx, actor, "task.pushed", id, t.ProjectID, "", "", data); err != nil {
+		return nil, err
+	}
+	return Get(ctx, tx, id)
+}
+
+func (t *Task) pushSHA() string {
+	if t.Push == nil {
+		return ""
+	}
+	return t.Push.SHA
 }
 
 // Claim atomically takes a ready, unblocked task. With id == "" it takes the
@@ -781,3 +969,27 @@ func mergeMeta(base json.RawMessage, set map[string]string) (string, error) {
 }
 
 func nullStr(s string) sql.NullString { return sql.NullString{String: s, Valid: s != ""} }
+
+func or(s, def string) string {
+	if s == "" {
+		return def
+	}
+	return s
+}
+
+// reviewOverride turns a --review value into tasks.review_profile_id and review_none:
+// "" = the project's review_profile, ReviewNone = no review, else an active profile.
+func reviewOverride(ctx context.Context, q db.Querier, review string) (sql.NullInt64, bool, error) {
+	switch review {
+	case "":
+		return sql.NullInt64{}, false, nil
+	case ReviewNone:
+		return sql.NullInt64{}, true, nil
+	}
+	id, err := profileID(ctx, q, review)
+	if err != nil {
+		return sql.NullInt64{}, false, apperr.New(apperr.NotFound, "--review: profile %s not found (want a profile or %s)",
+			review, ReviewNone)
+	}
+	return id, false, nil
+}

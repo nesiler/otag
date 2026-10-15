@@ -371,7 +371,11 @@ func buildSettings(ctx context.Context, spec adapter.RunSpec, user map[string]an
 	if d, ok := perms["deny"]; ok {
 		deny = append(deny, d.([]any)...)
 	}
-	for _, r := range DenyRules(spec.Workdir, spec.Deny, spec.Branch == "") {
+	// Same mode: the run works in the project checkout itself, whose .git is the
+	// repository. A detached review worktree has no branch either, but its .git is a
+	// pointer file like every linked worktree's.
+	sameMode := spec.Branch == "" && (spec.ProjectPath == "" || filepath.Clean(spec.Workdir) == filepath.Clean(spec.ProjectPath))
+	for _, r := range DenyRules(spec.Workdir, spec.Deny, sameMode) {
 		if !slices.Contains(deny, any(r)) {
 			deny = append(deny, r)
 		}

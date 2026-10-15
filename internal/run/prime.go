@@ -60,7 +60,9 @@ type PrimeInfo struct {
 	Rules    []string   `json:"rules,omitempty"`
 	Commands []Command  `json:"commands,omitempty"`
 	// Rejected is the last review rejection of the task (a retry after a review).
-	Rejected string     `json:"rejected,omitempty"`
+	Rejected string `json:"rejected,omitempty"`
+	// Reopened is why the task was reopened before this run (`otag task reopen`).
+	Reopened string     `json:"reopened,omitempty"`
 	Messages []PrimeMsg `json:"messages"`
 	// Project summary (coordinator, project): counts by status, live runs, needs.
 	Project  string         `json:"project,omitempty"`
@@ -102,7 +104,7 @@ func BuildPrime(ctx context.Context, q db.Querier, in PrimeInput) (*PrimeInfo, e
 		if err != nil {
 			return nil, err
 		}
-		p.Task, p.Rules, p.Commands = me.Task, me.Rules, append(append([]Command{}, ChildCommands...), primeExtra...)
+		p.Task, p.Rules, p.Commands = me.Task, me.Rules, append(append([]Command{}, me.Commands...), primeExtra...)
 		p.Kind = PrimeChild
 		if r.Role == "review" {
 			p.Kind = PrimeReview
@@ -122,6 +124,10 @@ func BuildPrime(ctx context.Context, q db.Querier, in PrimeInput) (*PrimeInfo, e
 		}
 		err = q.QueryRowContext(ctx, `SELECT coalesce((SELECT reason FROM reviews WHERE reviewed_task_id = ?
 			AND verdict = 'reject' AND reviewed_run_id <> ? ORDER BY id DESC LIMIT 1), '')`, r.TaskID, r.ID).Scan(&p.Rejected)
+		if err != nil {
+			return nil, err
+		}
+		p.Reopened, err = task.ReopenReason(ctx, q, r.TaskID, r.RetryOf)
 		return p, err
 	}
 	if in.ProjectID != 0 {
@@ -218,8 +224,17 @@ func (p *PrimeInfo) Text() string {
 		if p.Rejected != "" {
 			w("\nA previous attempt was rejected in review: %s", clip(oneLine(p.Rejected), priorClip))
 		}
+		if p.Reopened != "" {
+			w("\nThe task was reopened after it was done: %s", clip(oneLine(p.Reopened), priorClip))
+		}
 		if p.ReviewOf != nil {
-			w("\nYou review task %s: %s. Inspect its branch read-only (git log/diff against its base), then run", p.ReviewOf.ID, p.ReviewOf.Title)
+			if ws := r.Workspace; ws != nil && ws.Mode == "worktree" && ws.Branch == "" {
+				w("\nYou review task %s: %s. Your worktree is a detached checkout of the commit under review (head %s);",
+					p.ReviewOf.ID, p.ReviewOf.Title, short(ws.BaseSHA))
+				w("the task body has its base and the diff command. Inspect it, then run")
+			} else {
+				w("\nYou review task %s: %s. Inspect its branch read-only (git log/diff against its base), then run", p.ReviewOf.ID, p.ReviewOf.Title)
+			}
 			w("`otag review %s --accept \"<note>\"` or `otag review %s --reject \"<reason>\"`.", p.ReviewOf.ID, p.ReviewOf.ID)
 		}
 		w("\nRules:")
@@ -239,7 +254,7 @@ func (p *PrimeInfo) Text() string {
 	case PrimeProject:
 		w("You are outside a otag run, in project %s. Coordinate AI child agents with the `otag` CLI.", p.Project)
 		w("- `otag coord %s` starts or attaches the project's coordinator; or plan yourself:", p.Project)
-		for _, l := range coordGuide()[:4] {
+		for _, l := range coordGuide()[:5] {
 			w("- %s", l)
 		}
 		p.summaryText(w)

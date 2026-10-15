@@ -1,7 +1,9 @@
-// Package workspace prepares the directory an agent works in: a git worktree on branch
-// otag/<task> outside the repository (mode "worktree"), or the project itself ("same").
-// Nothing is written into the project's working tree; `git worktree add` only adds
-// metadata under the repository's .git directory.
+// Package workspace prepares the directory an agent works in: a git worktree on the
+// task's branch (<branch_prefix><task>) outside the repository (mode "worktree"), a
+// detached worktree at the commit a review run inspects, or the project itself
+// ("same"). Nothing is written into the project's working tree; `git worktree add` only
+// adds metadata under the repository's .git directory (and a base on a remote is
+// fetched into its remote-tracking ref).
 package workspace
 
 import (
@@ -26,7 +28,17 @@ type Spec struct {
 	Mode        string
 	ProjectPath string
 	Path        string // worktree path (mode worktree)
-	Branch      string // worktree branch (mode worktree)
+	Branch      string // worktree branch (mode worktree); "" with Detach
+	// Base is the ref a new branch starts from ("" = the project's HEAD); see
+	// ResolveBase. Only used when the worktree and its branch are created.
+	Base string
+	// Known: the task recorded Branch as its own before (tasks.branch). A branch that
+	// exists although the task never had it is someone else's: Prepare refuses it
+	// instead of taking it over.
+	Known bool
+	// Detach, when set, is the commit a detached worktree is created at (a review run
+	// inspects the reviewed task's head); no branch is created.
+	Detach string
 }
 
 // Result is a prepared workspace.
@@ -43,8 +55,11 @@ type Result struct {
 	BranchExisted bool `json:"branch_existed"`
 }
 
-// BranchFor returns the branch of a task.
-func BranchFor(taskID string) string { return "otag/" + taskID }
+// DefaultBranchPrefix is the branch prefix of a project that sets none.
+const DefaultBranchPrefix = "feature/"
+
+// BranchFor returns the branch of a new task worktree: prefix + task id.
+func BranchFor(prefix, taskID string) string { return prefix + taskID }
 
 // Prepare creates (or reuses) the workspace.
 func Prepare(ctx context.Context, s Spec) (Result, error) {
@@ -62,6 +77,9 @@ func Prepare(ctx context.Context, s Spec) (Result, error) {
 	if !isRepo(ctx, s.ProjectPath) {
 		return Result{}, fmt.Errorf("project %s is not a git repository (use workspace = \"same\")", s.ProjectPath)
 	}
+	if s.Detach != "" {
+		return prepareDetached(ctx, s)
+	}
 	r := Result{Mode: Worktree, Path: s.Path, Branch: s.Branch}
 	if _, err := os.Stat(s.Path); err == nil {
 		if err := checkWorktree(ctx, s); err != nil {
@@ -70,9 +88,17 @@ func Prepare(ctx context.Context, s Spec) (Result, error) {
 		r.Reused, r.BranchExisted = true, true
 		return r, nil
 	}
-	r.BaseRef, r.BaseSHA = head(ctx, s.ProjectPath)
-	if r.BaseSHA == "" {
-		return Result{}, fmt.Errorf("project %s has no commits", s.ProjectPath)
+	exists := BranchExists(ctx, s.ProjectPath, s.Branch)
+	if exists && !s.Known {
+		return Result{}, fmt.Errorf("branch %s already exists and is not this task's; rename or delete it, or set "+
+			"another branch_prefix for the project", s.Branch)
+	}
+	if !exists {
+		// The base is only needed for a new branch; a surviving one keeps its own.
+		var err error
+		if r.BaseRef, r.BaseSHA, err = ResolveBase(ctx, s.ProjectPath, s.Base); err != nil {
+			return Result{}, err
+		}
 	}
 	if err := os.MkdirAll(filepath.Dir(s.Path), 0o700); err != nil {
 		return Result{}, err
@@ -82,7 +108,7 @@ func Prepare(ctx context.Context, s Spec) (Result, error) {
 		return Result{}, err
 	}
 	args := []string{"worktree", "add", "--quiet"}
-	if _, err := git(ctx, s.ProjectPath, "show-ref", "--verify", "--quiet", "refs/heads/"+s.Branch); err == nil {
+	if exists {
 		args = append(args, s.Path, s.Branch) // branch survives from an earlier worktree
 		r.BranchExisted = true
 	} else {
@@ -92,6 +118,138 @@ func Prepare(ctx context.Context, s Spec) (Result, error) {
 		return Result{}, err
 	}
 	return r, nil
+}
+
+// prepareDetached creates (or reuses) a detached worktree at commit s.Detach: the
+// checkout a review run inspects. BaseSHA is that commit.
+func prepareDetached(ctx context.Context, s Spec) (Result, error) {
+	r := Result{Mode: Worktree, Path: s.Path, BaseSHA: s.Detach}
+	if _, err := os.Stat(s.Path); err == nil {
+		if err := linkedRoot(ctx, s.ProjectPath, s.Path); err != nil {
+			return Result{}, err
+		}
+		if b, err := git(ctx, s.Path, "symbolic-ref", "-q", "--short", "HEAD"); err == nil && b != "" {
+			return Result{}, fmt.Errorf("worktree %s is on branch %s, want a detached checkout of %s", s.Path, b, s.Detach)
+		}
+		if err := sameRepo(ctx, s.ProjectPath, s.Path); err != nil {
+			return Result{}, err
+		}
+		r.Reused = true
+		return r, nil
+	}
+	if !isSHA(s.Detach) {
+		return Result{}, fmt.Errorf("%q is not a commit id", s.Detach)
+	}
+	if _, err := git(ctx, s.ProjectPath, "cat-file", "-e", s.Detach+"^{commit}"); err != nil {
+		return Result{}, fmt.Errorf("commit %s to review is not in %s: %w", s.Detach, s.ProjectPath, err)
+	}
+	if err := os.MkdirAll(filepath.Dir(s.Path), 0o700); err != nil {
+		return Result{}, err
+	}
+	if _, err := git(ctx, s.ProjectPath, "worktree", "prune"); err != nil {
+		return Result{}, err
+	}
+	if _, err := git(ctx, s.ProjectPath, "worktree", "add", "--quiet", "--detach", s.Path, s.Detach); err != nil {
+		return Result{}, err
+	}
+	return r, nil
+}
+
+// ResolveBase returns the ref and commit a new task branch starts from. An empty base
+// is the project's HEAD. A remote-tracking ref (<remote>/<branch> or
+// refs/remotes/<remote>/<branch>, where <remote> is a configured remote) is fetched
+// first (`git fetch <remote> <branch>` into its remote-tracking ref); a failed fetch is
+// an error, never a silent fallback to a stale ref. Any other ref or commit is used as
+// it is and must resolve to a commit.
+func ResolveBase(ctx context.Context, projectPath, base string) (ref, sha string, err error) {
+	if base == "" {
+		ref, sha = head(ctx, projectPath)
+		if sha == "" {
+			return "", "", fmt.Errorf("project %s has no commits", projectPath)
+		}
+		return ref, sha, nil
+	}
+	if err := CheckRef(base); err != nil {
+		return "", "", fmt.Errorf("base: %w", err)
+	}
+	if remote, branch, ok := RemoteTracking(ctx, projectPath, base); ok {
+		spec := "+refs/heads/" + branch + ":refs/remotes/" + remote + "/" + branch
+		if _, err := git(ctx, projectPath, "fetch", "--quiet", "--no-tags", "--no-recurse-submodules", remote, spec); err != nil {
+			return "", "", fmt.Errorf("base %s: fetch %s %s failed: %w", base, remote, branch, err)
+		}
+		sha, err := git(ctx, projectPath, "rev-parse", "--verify", "-q", "refs/remotes/"+remote+"/"+branch+"^{commit}")
+		if err != nil {
+			return "", "", fmt.Errorf("base %s: no commit after the fetch: %w", base, err)
+		}
+		return remote + "/" + branch, sha, nil
+	}
+	sha, err = git(ctx, projectPath, "rev-parse", "--verify", "-q", "--end-of-options", base+"^{commit}")
+	if err != nil || sha == "" {
+		return "", "", fmt.Errorf("base %s does not name a commit in %s", base, projectPath)
+	}
+	return base, sha, nil
+}
+
+// RemoteTracking splits base into a configured remote and its branch when base is a
+// remote-tracking ref (<remote>/<branch> or refs/remotes/<remote>/<branch>). The
+// longest configured remote that prefixes base wins.
+func RemoteTracking(ctx context.Context, projectPath, base string) (remote, branch string, ok bool) {
+	rest := strings.TrimPrefix(base, "refs/remotes/")
+	remotes, err := git(ctx, projectPath, "remote")
+	if err != nil {
+		return "", "", false
+	}
+	for _, r := range strings.Split(remotes, "\n") {
+		if r == "" || !strings.HasPrefix(rest, r+"/") || len(r) <= len(remote) {
+			continue
+		}
+		if b := strings.TrimPrefix(rest, r+"/"); b != "" {
+			remote, branch, ok = r, b, true
+		}
+	}
+	return remote, branch, ok
+}
+
+// HasRemote reports whether name is a configured remote of the repository.
+func HasRemote(ctx context.Context, projectPath, name string) bool {
+	if CheckRef(name) != nil {
+		return false
+	}
+	_, err := git(ctx, projectPath, "remote", "get-url", "--", name)
+	return err == nil
+}
+
+// RemoteHead returns the remote default branch of the repository as a
+// remote-tracking ref (origin/main from refs/remotes/origin/HEAD; origin first, else
+// the first remote that has one), "" when no remote names one.
+func RemoteHead(ctx context.Context, projectPath string) string {
+	out, err := git(ctx, projectPath, RemoteHeadArgs...)
+	if err != nil {
+		return ""
+	}
+	return ParseRemoteHeads(out)
+}
+
+// RemoteHeadArgs is the git command (after -C dir) whose output ParseRemoteHeads reads.
+var RemoteHeadArgs = []string{"for-each-ref", "--format=%(refname:short) %(symref:short)", "refs/remotes/*/HEAD"}
+
+// ParseRemoteHeads picks the remote default branch from RemoteHeadArgs' output: origin's,
+// else the first one ("" = none).
+func ParseRemoteHeads(out string) string {
+	best := ""
+	for _, line := range strings.Split(out, "\n") {
+		name, target, ok := strings.Cut(line, " ")
+		if !ok || target == "" {
+			continue
+		}
+		if strings.HasPrefix(name, "origin/") || name == "origin" {
+			return target
+		}
+		if best == "" {
+			best = target
+		}
+	}
+	return best
 }
 
 // checkWorktree verifies that an existing path is the root of a linked worktree of the
@@ -176,7 +334,9 @@ func Changes(ctx context.Context, dir string) (string, error) {
 type RemoveSpec struct {
 	ProjectPath string
 	Path        string // the recorded worktree path
-	Branch      string // the task's branch: the worktree must still be on it
+	// Branch is the task's branch: the worktree must still be on it. "" is a detached
+	// review checkout: the worktree must still be detached.
+	Branch string
 	// Root is otag's worktree root of the project (<data>/worktrees/<project>): Path,
 	// with symlinks resolved, must be inside it.
 	Root  string
@@ -197,7 +357,8 @@ const (
 // Force, which discards them. A path that no longer exists is only pruned from git's
 // list; an empty directory (what an interrupted removal leaves) is deleted first, as it
 // has nothing to lose. A path outside Root, the main checkout, anything that is not a
-// linked worktree of the repository, and a worktree with a detached HEAD are refused.
+// linked worktree of the repository, and a worktree with a detached HEAD where a branch
+// was expected (s.Branch set) are refused.
 // The branch stays.
 func Remove(ctx context.Context, s RemoveSpec) (string, error) {
 	state, err := inspect(ctx, s)
@@ -374,8 +535,23 @@ func DeleteBranch(ctx context.Context, projectPath, branch, target string) (int,
 	return 0, deleteBranchAt(ctx, projectPath, branch, oid, target, targetOID)
 }
 
-// deleteBranchAt deletes branch if it still points at oid, target still at targetOID,
-// and no worktree has branch checked out.
+// ForceDeleteBranch deletes branch whether or not any branch contains it (`git branch
+// -D`): a squash or rebase merge never makes a task branch an ancestor of the target.
+// It is still one ref transaction on the commit read first, and a symbolic ref or a
+// branch checked out in a worktree is refused.
+func ForceDeleteBranch(ctx context.Context, projectPath, branch string) error {
+	if _, err := git(ctx, projectPath, "symbolic-ref", "-q", "refs/heads/"+branch); err == nil {
+		return fmt.Errorf("branch %s is a symbolic ref; not deleted", branch)
+	}
+	oid, err := git(ctx, projectPath, "rev-parse", "--verify", "-q", "refs/heads/"+branch)
+	if err != nil {
+		return err
+	}
+	return deleteBranchAt(ctx, projectPath, branch, oid, "", "")
+}
+
+// deleteBranchAt deletes branch if it still points at oid, target (when set) still at
+// targetOID, and no worktree has branch checked out.
 func deleteBranchAt(ctx context.Context, projectPath, branch, oid, target, targetOID string) error {
 	list, err := worktreeList(ctx, projectPath)
 	if err != nil {
@@ -386,7 +562,11 @@ func deleteBranchAt(ctx context.Context, projectPath, branch, oid, target, targe
 			return fmt.Errorf("branch %s is checked out in %s", branch, w.path)
 		}
 	}
-	tx := fmt.Sprintf("start\nverify refs/heads/%s %s\ndelete refs/heads/%s %s\ncommit\n", target, targetOID, branch, oid)
+	tx := "start\n"
+	if target != "" {
+		tx += fmt.Sprintf("verify refs/heads/%s %s\n", target, targetOID)
+	}
+	tx += fmt.Sprintf("delete refs/heads/%s %s\ncommit\n", branch, oid)
 	_, err = gitIn(ctx, projectPath, tx, "update-ref", "--no-deref", "--stdin")
 	return err
 }

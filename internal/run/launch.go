@@ -29,7 +29,20 @@ func (m *Manager) launch(ctx context.Context, p *plan, ad adapter.Adapter) (*Sta
 	wsSpec := workspace.Spec{Mode: p.mode, ProjectPath: p.projectPath}
 	if p.mode == workspace.Worktree {
 		wsSpec.Path = paths.Worktree(getenv, p.project, p.taskID)
-		wsSpec.Branch = workspace.BranchFor(p.taskID)
+		wsSpec.Branch, wsSpec.Base, wsSpec.Known = p.branch, p.base, p.knownBranch
+		if p.branch == "" {
+			// A review run: detached at the reviewed head (the reviewed branch's tip
+			// when no done run recorded it).
+			if p.reviewHead == "" {
+				sha, err := workspace.BranchSHA(ctx, p.projectPath, p.reviewBranch)
+				if err != nil {
+					return nil, withCause(CauseWorkspace, apperr.New(apperr.Unavailable, "workspace: review of %s: %v",
+						p.reviewOf, err))
+				}
+				p.reviewHead = sha
+			}
+			wsSpec.Detach = p.reviewHead
+		}
 	}
 	ws, err := workspace.Prepare(ctx, wsSpec)
 	if err != nil {
@@ -55,10 +68,17 @@ func (m *Manager) launch(ctx context.Context, p *plan, ad adapter.Adapter) (*Sta
 		if r.Status != Queued {
 			return errStopped
 		}
-		_, err = tx.ExecContext(ctx, `
+		if _, err := tx.ExecContext(ctx, `
 INSERT INTO workspaces (project_id, task_id, run_id, mode, path, branch, base_ref, base_sha, status)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active')`, r.ProjectID, nullStr(p.taskID), p.runID, ws.Mode, ws.Path, nullStr(ws.Branch),
-			nullStr(ws.BaseRef), nullStr(ws.BaseSHA))
+			nullStr(ws.BaseRef), nullStr(ws.BaseSHA)); err != nil {
+			return err
+		}
+		if ws.Branch == "" || p.taskID == "" {
+			return nil
+		}
+		// From now on the task keeps this branch, whatever branch_prefix says later.
+		_, err = task.SetBranch(ctx, tx, p.taskID, ws.Branch)
 		return err
 	})
 	if err != nil {
