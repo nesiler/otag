@@ -2,10 +2,86 @@ package guard
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+// detachedWorktree makes a repository with a branch "docs" (also a directory), a
+// remote-tracking branch "origin/feat" and a file main.go, and returns a detached
+// linked worktree of it.
+func detachedWorktree(t *testing.T) string {
+	t.Helper()
+	repo := filepath.Join(t.TempDir(), "repo")
+	wt := filepath.Join(t.TempDir(), "wt")
+	run := func(dir string, args ...string) {
+		t.Helper()
+		if out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	if err := os.MkdirAll(filepath.Join(repo, "docs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.WriteFile(filepath.Join(repo, "main.go"), []byte("package main\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(repo, "docs", "a.md"), []byte("a\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(repo, "feat"), []byte("a file named like a remote branch\n"), 0o644)
+	run(repo, "init", "-q", "-b", "main")
+	run(repo, "add", ".")
+	run(repo, "-c", "user.name=t", "-c", "user.email=t@e", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "init")
+	run(repo, "branch", "docs")
+	run(repo, "update-ref", "refs/remotes/origin/feat", "HEAD")
+	run(repo, "worktree", "add", "-q", "--detach", wt, "HEAD")
+	return wt
+}
+
+// Round 2: a path that is also a branch (local, or remote that git would turn into a
+// local one) is a branch switch without "--", also with packed refs; operands after
+// "--" count; variables in read-only operands are fine, in ones that decide a ref
+// write they are not; quoted command substitutions and backticks are checked like
+// unquoted ones.
+func TestDetachedReviewWorktreeRound2(t *testing.T) {
+	wd := detachedWorktree(t)
+	p := Policy{Workdir: wd, Level: Light, Detached: true}
+	deny := []string{"git checkout docs", "git checkout feat", "git symbolic-ref -- HEAD refs/heads/other",
+		"git branch -- scratch", "git tag -- v1", `git switch "$B"`, `git checkout "$X"`, `git fetch origin "$SPEC"`,
+		`git tag "$T"`, `git branch "$N"`, `git rebase "$UP"`, `git stash "$OP"`, `echo "$(git switch other)"`,
+		"echo \"`git switch other`\"", `x="$(git branch scratch)"`, `echo "$(echo "$(git checkout docs)")"`,
+		"echo `git symbolic-ref HEAD refs/heads/x`"}
+	allow := []string{"git checkout -- docs", "git checkout main.go", "git checkout HEAD -- feat", "git restore docs",
+		`git branch --contains "$SHA"`, `git stash show "$STASH"`, `git log "$X"`, `git diff "$A...$B"`,
+		`git show "$SHA":main.go`, `echo "$(git branch --show-current)"`, `echo "$(git rev-parse HEAD)"`,
+		"echo `git log -1 --format=%H`"}
+	check := func() {
+		t.Helper()
+		for _, cmd := range deny {
+			if d := p.CheckCommand(cmd); d.Allow {
+				t.Errorf("allowed %q", cmd)
+			}
+		}
+		for _, cmd := range allow {
+			if d := p.CheckCommand(cmd); !d.Allow {
+				t.Errorf("denied %q: %s", cmd, d.Reason)
+			}
+		}
+	}
+	check()
+	// The same with every ref packed into packed-refs.
+	if out, err := exec.Command("git", "-C", wd, "pack-refs", "--all", "--prune").CombinedOutput(); err != nil {
+		t.Fatalf("pack-refs: %v %s", err, out)
+	}
+	check()
+	// Refs that cannot be read: a path operand without "--" is refused, with "--" not.
+	unknown := Policy{Workdir: t.TempDir(), Level: Light, Detached: true}
+	_ = os.WriteFile(filepath.Join(unknown.Workdir, "main.go"), []byte("x"), 0o644)
+	if d := unknown.CheckCommand("git checkout main.go"); d.Allow {
+		t.Error("a path checkout with unreadable refs allowed")
+	}
+	if d := unknown.CheckCommand("git checkout -- main.go"); !d.Allow {
+		t.Errorf("git checkout -- main.go: %s", d.Reason)
+	}
+}
 
 // A detached review worktree has no branch of its own: at both levels HEAD stays
 // detached (no switch or checkout onto a branch, no new branch) and no ref is created,
@@ -14,10 +90,7 @@ import (
 // denial points to `otag task push`. A normal run keeps its own rules.
 func TestDetachedReviewWorktree(t *testing.T) {
 	for _, level := range []Level{Strict, Light} {
-		wd := t.TempDir()
-		if err := os.WriteFile(filepath.Join(wd, "main.go"), []byte("package main\n"), 0o644); err != nil {
-			t.Fatal(err)
-		}
+		wd := detachedWorktree(t)
 		p := Policy{Workdir: wd, Level: level, Detached: true}
 		for _, cmd := range []string{"git switch other", "git switch -c x", "git switch -C x", "git switch --orphan x",
 			"git switch -d -c x HEAD", "git checkout other", "git checkout -", "git checkout -b x", "git checkout -B x HEAD",

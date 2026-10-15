@@ -396,8 +396,10 @@ func (p Policy) checkCommand(cmd string, depth int) Decision {
 	if dangerousGit(cmd, p.Level) {
 		return deny("a git push or ref change inside $(...), backticks, eval or a variable cannot be inspected; run it as a plain command")
 	}
-	if p.Detached && detachedText(cmd) {
-		return deny(detachedDenied + "; a git command inside $(...), backticks, eval or a variable cannot be inspected")
+	if p.Detached {
+		if d := p.checkSubstitutions(cmd, depth); !d.Allow {
+			return d
+		}
 	}
 	// The shell's directory before each open subshell, restored when it closes.
 	type dir struct {

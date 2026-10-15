@@ -448,10 +448,18 @@ hook context marks it detached (`Policy.Detached`). HEAD must stay detached and 
 may change: `switch`/`checkout` onto a branch (`-b/-B/-c/-C/--orphan` too), branch and
 tag creation, moves and deletes, `symbolic-ref`, `stash branch`, `worktree add`, `rebase
 <upstream> <branch>`, fetch refspecs with a destination, `notes`/`replace` writes,
-`update-ref`, pushes, and such commands hidden in substitutions are refused; restoring
-files (`checkout -- <paths>`, `restore`), detaching at another commit (`switch --detach`,
-`checkout <commit>`), commits and resets of the detached HEAD, reading, building and
-testing are not. In a light run this hook guard is the only boundary. Claude
+`update-ref` and pushes are refused; restoring files (`checkout -- <paths>`, `restore`),
+detaching at another commit (`switch --detach`, `checkout <commit>`), commits and resets
+of the detached HEAD, reading, building and testing are not. `checkout <name>` without
+`--` counts as restoring files only when `<name>` is a path and not a branch (local, or
+a remote branch git would make a local one of; read from the refs and `packed-refs`,
+and refused when they cannot be read). A variable in an operand is fine where the
+command only reads (`git branch --contains "$SHA"`) and refused where it decides between
+a ref write and a harmless operation (`git switch "$B"`, a fetch refspec). Commands
+inside `$(...)` and backticks are checked like plain ones, quoted or not. A command
+assembled from variables (`$GIT switch x`) or other indirection is beyond the parser:
+best effort, like the quoted and wrapped spellings above (threat model: accidents). In
+a light run this hook guard is the only boundary. Claude
 keeps the `.git` pointer and every branch ref denied in its sandbox (as in any linked
 worktree); Codex's `permissions.otag` makes only `objects` writable in the common git
 dir (no ref). otag does not dictate what the reviewer does in the checkout.
