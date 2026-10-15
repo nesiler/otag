@@ -54,12 +54,37 @@ written before the last one):
 
 Until **Write**, nothing is written: the database is only read (read-only, without even
 a journal file), the config dir is not touched. On **Write** otag takes a lock in the
-config dir (`.otag-config.lock`, so two setup commands never interleave), loads the
-result the way `otag sync` would (a configuration that would not load is never written),
-and refuses with nothing written if `registry.toml` changed since setup read it (an edit
-saved meanwhile is never overwritten; run the command again). New files are created
-only if nothing is there yet, a changed `registry.toml` keeps its file mode, and a backup
-never replaces an earlier one (`-2`, `-3`, ... are added).
+config dir (`.otag-config.lock`; `otag init`, `otag project` and `otag sync` take it, so
+they never interleave), reads the database again (the project's automatic name and
+prefix are chosen again from it; a removed project gets its old ones back, a prefix you
+typed is kept, and one that clashes is refused), and loads the result the way `otag
+sync` would: a configuration that would not load is never written.
+
+New files are put in place only if nothing is there yet (an exclusive rename,
+`RENAME_EXCL`, so it also works on file systems without hard links), a changed
+`registry.toml` keeps its file mode, and a backup never replaces an earlier one (`-2`,
+`-3`, ... are added).
+
+### Editing the files while setup writes them
+
+Editors do not take otag's lock, so the change to an existing `registry.toml` (an
+append, or `--force`) is made so that an edit saved at any moment is never lost:
+
+1. The new content is written to a temporary file.
+2. The current `registry.toml` is moved aside (renamed: to the backup with `--force`,
+   else to a hidden `.registry.toml.otag-old`), and the moved file is hashed.
+3. If it is not the file setup read (you saved in between), it is moved back and
+   nothing is written: run the command again.
+4. Else the new file is renamed into place without replacing anything. If you saved
+   after step 2, your save created `registry.toml` again: otag leaves it there, keeps
+   the version before it aside (the error names it) and writes nothing.
+5. Only then is the aside copy removed (or kept as the `--force` backup).
+
+For an instant between steps 2 and 4 there is no `registry.toml`; `otag sync` waits
+for the lock and never sees that. An editor that keeps the file open and writes into
+it in place (not by saving a new file) during those milliseconds writes into the
+moved-aside copy, which is then kept only as a `--force` backup: save, then run
+setup.
 
 ### `otag init`
 
@@ -90,13 +115,17 @@ a subdirectory registers its top level), with the same defaults as the wizard. O
 terminal it shows the wizard's project page to confirm and edit; without one it needs
 `--yes`. It writes `projects/<name>.toml` and runs `otag sync`.
 
+A repository that was a project before (`otag project remove`) gets its old name back,
+and with it its prefix and tasks.
+
 `project remove` renames the project's file to `<name>.toml.removed-<timestamp>` (kept,
 no longer loaded; never over an earlier one) and runs `otag sync`, which retires the
 project. Sync never deletes anything: the project's tasks, runs, messages and history
 stay in the database, and its worktrees and branches stay on disk. A project with runs
 that have not ended is refused (stop them first); the check is repeated in the
 transaction that retires the project, so a run started meanwhile is seen and the file
-is put back. `otag project add` brings it back, with its old prefix and tasks.
+is put back. `otag sync` waits for the config lock, so it never syncs the moment the
+file is moved aside. `otag project add` brings it back, with its old prefix and tasks.
 
 In the TUI, a tree without projects says what to do; if `otag tui` was started inside a
 git repository that is not a project yet, `a` (or the context menu) adds it.
