@@ -1,0 +1,40 @@
+ otag │ ⚑ 2 needs you │ ✉ 2 │ ⇪ 1 to deliver │ daemon ○ │ c2 91% (5h)
+▾ alpha  strict      ╭────────────────────────────────────────────────────────────────────────────╮ats │ 6 Log
+    ○ coord sonnet   │ Everywhere                                                                 │
+  ▾ ⇪ Ready to delive│   q ctrl+c     quit (no agent is affected)                                 │
+    ▸ ⇪ al-9 Add CSV │   ?            this help                                                   │
+  ▾ ? al-14 Ask about│   1-6          tabs: Preview Details Needs Inbox Stats Log                 │
+      ? r1 sonnet    │   !            Needs tab                                                   │
+    ⊘ al-16 Blocked t│   ctrl+r F5    reload now                                                  │
+  ▾ ● al-12 Fix login│   ctrl+l       redraw the screen                                           │
+      ● r2 sonnet    │   tab          focus: tree, right pane, message box (narrow: swaps; also   │
+      +1 earlier     │                shift+tab)                                                  │
+      · al-17 Review │   < > =        narrower, wider, default tree width                         │
+    · al-13 Docs     │   .            show or hide closed tasks                                   │
+    ◌ al-15 Draft ide│   /            filter the tree by id, title or profile (enter keeps it)    │
+▾ beta  light        │   esc          clear the filter                                            │
+    · be-1 Beta thing│                                                                            │
+                     │ Tree                                                                       │
+                     │   ↑↓ k j       move                                                        │
+                     │   pgup pgdn    page up, down                                               │
+                     │   g G          first, last row (also home, end)                            │
+                     │   ← h          collapse (or go to the parent)                              │
+                     │   → l          expand                                                      │
+                     │   space enter  expand or collapse (enter on a live run: attach)            │
+                     │                                                                            │
+                     │ Right pane (preview and tabs)                                              │
+                     │   ↑↓ k j       scroll (preview: up enters scroll-lock)                     │
+                     │   pgup pgdn    page up, down                                               │
+                     │   g G          top, bottom (preview: G follows live; also home, end)       │
+                     │   ← → h l      scroll left, right                                          │
+                     │   enter        preview: attach; Needs, Inbox: the item's first action      │
+                     │                                                                            │
+                     │ Actions on the selected row (tree or right pane)                           │
+                     │   n e x        new task…, edit task…, cancel task…                         │
+                     │   R b          mark ready (also unblocks), block…                          │
+                     │   s S p u      start a run…, stop…, park…, resume                          │
+                     │   m r          message box to the selection; reply to its open question    │
+                     │   i            typing mode: keys go to the agent (C-q / M-q leaves)        │
+── message ──────────│ ↑↓ pgup pgdn scroll · lines 1-35 of 64                                     │─────────────────────
+ to: coord ▾  info ▾ ╰────────────────────────────────────────────────────────────────────────────╯               [Send]
+[q] quit  [?] help  [!] needs  [tab] focus  [.] closed  [n] new  [s] start  [S] stop  [m] message  [r] reply  [i] type

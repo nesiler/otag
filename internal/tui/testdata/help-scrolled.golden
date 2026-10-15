@@ -1,0 +1,40 @@
+ otag │ ⚑ 2 needs you │ ✉ 2 │ ⇪ 1 to deliver │ daemon ○ │ c2 91% (5h)
+▾ alpha  strict      ╭────────────────────────────────────────────────────────────────────────────╮ats │ 6 Log
+    ○ coord sonnet   │ Actions on the selected row (tree or right pane)                           │
+  ▾ ⇪ Ready to delive│   n e x        new task…, edit task…, cancel task…                         │
+    ▸ ⇪ al-9 Add CSV │   R b          mark ready (also unblocks), block…                          │
+  ▾ ? al-14 Ask about│   s S p u      start a run…, stop…, park…, resume                          │
+      ? r1 sonnet    │   m r          message box to the selection; reply to its open question    │
+    ⊘ al-16 Blocked t│   i            typing mode: keys go to the agent (C-q / M-q leaves)        │
+  ▾ ● al-12 Fix login│   c            the project's coordinator: attach if live, else start…      │
+      ● r2 sonnet    │   v D          review…, deliver…                                           │
+      +1 earlier     │   A            acknowledge every notification…                             │
+      · al-17 Review │   o            context menu of the row, item or tab (right-click; also     │
+    · al-13 Docs     │                shift+F10, menu)                                            │
+    ◌ al-15 Draft ide│   y            copy the id, or a run's attach command                      │
+▾ beta  light        │   E            expand every row of the project                             │
+    · be-1 Beta thing│   Y            sync the registry (otag sync)                               │
+                     │                                                                            │
+                     │ Message box: Enter send · alt/shift+Enter, ctrl+j newline · ctrl+k kind    │
+                     │   · ctrl+t recipient · Esc back. Dialogs: Tab moves · ctrl+s or a button   │
+                     │   submits · Esc.                                                           │
+                     │ Mouse: click selects, double click expands (a live run: attaches), the     │
+                     │   wheel scrolls what is under it, drag the divider to resize; a click on   │
+                     │   the preview types into it. Right-click opens the context menu (key o):   │
+                     │   each item shows its key, a disabled one says why. Esc, ? or a click      │
+                     │   closes this help.                                                        │
+                     │                                                                            │
+                     │ Typing mode (i): every key goes to the agent, Esc and Esc Esc too; C-q,    │
+                     │   M-q or a click outside the preview leave. Enter waits 150 ms after typed │
+                     │   text (500 after a paste) so agents do not take it for part of a paste.   │
+                     │   Not sent: clicks in the preview, image paste, super/Cmd keys;            │
+                     │   ctrl+shift+letter degrades; shift+Enter only reaches agents that turned  │
+                     │   on extended keys (alt+Enter, ctrl+j or the message box work everywhere); │
+                     │   a wider pane is cropped.                                                 │
+                     │ Attach (Enter, double click): full screen in otag's tmux; back with M-q,   │
+                     │   C-q or a click on "← otag" in its status bar (macOS: M-q needs Option as │
+                     │   Meta). Inside your own tmux it opens as a popup. set -g @otag_ui off (in │
+                     │   otag's tmux.conf) keeps otag's bindings and status bar off its server.   │
+── message ──────────│ ↑↓ pgup pgdn scroll · lines 30-64 of 64                                    │─────────────────────
+ to: coord ▾  info ▾ ╰────────────────────────────────────────────────────────────────────────────╯               [Send]
+[q] quit  [?] help  [!] needs  [tab] focus  [.] closed  [n] new  [s] start  [S] stop  [m] message  [r] reply  [i] type

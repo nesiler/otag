@@ -1,0 +1,8 @@
+*.bak
+*.log
+.serena/
+.claude/worktrees/
+bin/
+.DS_Store
+
+dist/

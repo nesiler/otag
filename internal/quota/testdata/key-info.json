@@ -1,0 +1,2 @@
+{"key": "hashed-token-not-secret", "info": {"key_alias": "oc", "spend": 15.6307168923, "max_budget": 100.0,
+ "budget_reset_at": "2026-11-01T00:00:00+00:00", "budget_duration": "30d", "blocked": null, "tpm_limit": null}}

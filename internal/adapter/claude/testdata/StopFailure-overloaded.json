@@ -1,0 +1,1 @@
+{"session_id":"abc123","transcript_path":"/nonexistent/abc123.jsonl","cwd":"/w","hook_event_name":"StopFailure","error":"overloaded","last_assistant_message":"API Error: Overloaded"}

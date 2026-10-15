@@ -1,0 +1,11 @@
+{"type":"permission-mode","permissionMode":"bypassPermissions","sessionId":"s"}
+{"parentUuid":null,"isSidechain":false,"promptId":"p1","type":"user","message":{"role":"user","content":"first"},"uuid":"u1"}
+{"parentUuid":"u1","isSidechain":false,"type":"assistant","message":{"id":"msg_1","model":"claude-haiku-5-5","role":"assistant","content":[{"type":"text","text":"old"}],"usage":{"input_tokens":5,"cache_creation_input_tokens":100,"cache_read_input_tokens":1000,"output_tokens":7}},"uuid":"a1"}
+{"parentUuid":"a1","isSidechain":false,"promptId":"p2","type":"user","message":{"role":"user","content":"second"},"uuid":"u2"}
+{"parentUuid":"u2","isSidechain":false,"type":"assistant","message":{"id":"msg_2","model":"claude-haiku-5-5","role":"assistant","content":[{"type":"thinking","thinking":""}],"usage":{"input_tokens":10,"cache_creation_input_tokens":9629,"cache_read_input_tokens":24883,"output_tokens":200}},"uuid":"a2"}
+{"parentUuid":"a2","isSidechain":false,"type":"assistant","message":{"id":"msg_2","model":"claude-haiku-5-5","role":"assistant","content":[{"type":"tool_use","id":"toolu_1","name":"Bash","input":{"command":"ls"}}],"usage":{"input_tokens":10,"cache_creation_input_tokens":9629,"cache_read_input_tokens":24883,"output_tokens":206,"output_tokens_details":{"thinking_tokens":128}}},"uuid":"a3"}
+{"parentUuid":"a3","isSidechain":false,"promptId":"p2","type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_1","content":"\"type\":\"assistant\" in output"}]},"toolUseResult":{},"uuid":"u3"}
+{"parentUuid":"u3","isSidechain":false,"promptId":"p3","type":"user","message":{"role":"user","content":"third"},"uuid":"u4"}
+{"parentUuid":"u4","isSidechain":false,"type":"assistant","message":{"id":"msg_3","model":"claude-haiku-5-5","role":"assistant","content":[{"type":"text","text":"done"}],"usage":{"input_tokens":8,"cache_creation_input_tokens":271,"cache_read_input_tokens":34512,"output_tokens":236}},"uuid":"a4"}
+{"parentUuid":"a4","isSidechain":false,"type":"assistant","message":{"id":"msg_err","model":"<synthetic>","role":"assistant","content":[{"type":"text","text":"API Error"}],"usage":{"input_tokens":0,"output_tokens":0}},"uuid":"a5"}
+{"parentUuid":"a5","type":"assistant","message":{"id":"msg_4","model":"claude-haiku

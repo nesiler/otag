@@ -1,0 +1,5 @@
+{"rate_limits": {
+  "five_hour": {"used_percentage": 1791670430, "resets_at": 1791670430},
+  "seven_day": {"used_percentage": 100, "resets_at": 1791984668},
+  "spend_limit": {"used_percentage": 112.5, "resets_at": 1793000000, "used_usd": 562.5, "limit_usd": 500, "period": "monthly"}
+}}

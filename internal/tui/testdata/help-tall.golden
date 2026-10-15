@@ -1,0 +1,80 @@
+ otag │ ⚑ 2 needs you │ ✉ 2 │ ⇪ 1 to deliver │ daemon ○ │ c2 91% (5h)
+▾ alpha  strict       6 open · 2 ready│ 1 Preview │ 2 Details │ 3 Needs 2 │ 4 Inbox 2 │ 5 Stats │ 6…
+    ○ coord sonnet        idle 2h q91%│○ alpha-c1 · sonnet · idle · %1 · FOLLOW
+  ▾ ⇪ Ready to deliver (1)            │agent output
+    ▸ ⇪ al-9 Add CSV export    done 3h│>
+  ▾ ? al-14 Ask about colo… waiting 5m│
+      ? r1 sonnet     waiting 20m q91%│
+    ⊘ al-16╭────────────────────────────────────────────────────────────────────────────╮
+  ▾ ● al-12│ Everywhere                                                                 │
+      ● r2 │   q ctrl+c     quit (no agent is affected)                                 │
+      +1 ea│   ?            this help                                                   │
+      · al-│   1-6          tabs: Preview Details Needs Inbox Stats Log                 │
+    · al-13│   !            Needs tab                                                   │
+    ◌ al-15│   ctrl+r F5    reload now                                                  │
+▾ beta  lig│   ctrl+l       redraw the screen                                           │
+    · be-1 │   tab          focus: tree, right pane, message box (narrow: swaps; also   │
+           │                shift+tab)                                                  │
+           │   < > =        narrower, wider, default tree width                         │
+           │   .            show or hide closed tasks                                   │
+           │   /            filter the tree by id, title or profile (enter keeps it)    │
+           │   esc          clear the filter                                            │
+           │                                                                            │
+           │ Tree                                                                       │
+           │   ↑↓ k j       move                                                        │
+           │   pgup pgdn    page up, down                                               │
+           │   g G          first, last row (also home, end)                            │
+           │   ← h          collapse (or go to the parent)                              │
+           │   → l          expand                                                      │
+           │   space enter  expand or collapse (enter on a live run: attach)            │
+           │                                                                            │
+           │ Right pane (preview and tabs)                                              │
+           │   ↑↓ k j       scroll (preview: up enters scroll-lock)                     │
+           │   pgup pgdn    page up, down                                               │
+           │   g G          top, bottom (preview: G follows live; also home, end)       │
+           │   ← → h l      scroll left, right                                          │
+           │   enter        preview: attach; Needs, Inbox: the item's first action      │
+           │                                                                            │
+           │ Actions on the selected row (tree or right pane)                           │
+           │   n e x        new task…, edit task…, cancel task…                         │
+           │   R b          mark ready (also unblocks), block…                          │
+           │   s S p u      start a run…, stop…, park…, resume                          │
+           │   m r          message box to the selection; reply to its open question    │
+           │   i            typing mode: keys go to the agent (C-q / M-q leaves)        │
+           │   c            the project's coordinator: attach if live, else start…      │
+           │   v D          review…, deliver…                                           │
+           │   A            acknowledge every notification…                             │
+           │   o            context menu of the row, item or tab (right-click; also     │
+           │                shift+F10, menu)                                            │
+           │   y            copy the id, or a run's attach command                      │
+           │   E            expand every row of the project                             │
+           │   Y            sync the registry (otag sync)                               │
+           │                                                                            │
+           │ Message box: Enter send · alt/shift+Enter, ctrl+j newline · ctrl+k kind    │
+           │   · ctrl+t recipient · Esc back. Dialogs: Tab moves · ctrl+s or a button   │
+           │   submits · Esc.                                                           │
+           │ Mouse: click selects, double click expands (a live run: attaches), the     │
+           │   wheel scrolls what is under it, drag the divider to resize; a click on   │
+           │   the preview types into it. Right-click opens the context menu (key o):   │
+           │   each item shows its key, a disabled one says why. Esc, ? or a click      │
+           │   closes this help.                                                        │
+           │                                                                            │
+           │ Typing mode (i): every key goes to the agent, Esc and Esc Esc too; C-q,    │
+           │   M-q or a click outside the preview leave. Enter waits 150 ms after typed │
+           │   text (500 after a paste) so agents do not take it for part of a paste.   │
+           │   Not sent: clicks in the preview, image paste, super/Cmd keys;            │
+           │   ctrl+shift+letter degrades; shift+Enter only reaches agents that turned  │
+           │   on extended keys (alt+Enter, ctrl+j or the message box work everywhere); │
+           │   a wider pane is cropped.                                                 │
+           │ Attach (Enter, double click): full screen in otag's tmux; back with M-q,   │
+           │   C-q or a click on "← otag" in its status bar (macOS: M-q needs Option as │
+           │   Meta). Inside your own tmux it opens as a popup. set -g @otag_ui off (in │
+           │   otag's tmux.conf) keeps otag's bindings and status bar off its server.   │
+           ╰────────────────────────────────────────────────────────────────────────────╯
+                                      │
+                                      │
+                                      │
+                                      │
+── message ─────────────────────────────────────────────────────────────────────────────────────────
+ to: coord ▾  info ▾  m: message coord · r: reply to a question                               [Send]
+[q] quit  [?] help  [!] needs  [tab] focus  [.] closed  [n] new  [s] start  [S] stop  [m] message …

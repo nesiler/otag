@@ -1,0 +1,32 @@
+name: Bug report
+description: Something does not work as documented
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: Include what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `otag doctor`
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: otag version
+      description: Output of `otag --version` (or `otag version --json`), plus how you installed it.
+  - type: input
+    id: env
+    attributes:
+      label: macOS, tmux and agent versions
+      placeholder: macOS 15, tmux 3.5, Claude Code x.y

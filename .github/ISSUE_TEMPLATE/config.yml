@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and ideas
+    url: https://github.com/nesiler/otag/discussions
+    about: Ask questions and discuss ideas in Discussions.
+  - name: Security vulnerability
+    url: https://github.com/nesiler/otag/security/advisories/new
+    about: Report vulnerabilities privately, not as a public issue.

@@ -1,0 +1,24 @@
+ otag │ ⚑ 2 needs you │ ✉ 2 │ ⇪ 1 to deliver │ daemon ○ │ c2 91% (5h)
+▾ ╭──────────────────────────────────────────────────────────────────────────╮dy
+  │   → l          expand                                                    │1%
+  │   space enter  expand or collapse (enter on a live run: attach)          │
+  │                                                                          │3h
+  │ Right pane (preview and tabs)                                            │5m
+  │   ↑↓ k j       scroll (preview: up enters scroll-lock)                   │1%
+  │   pgup pgdn    page up, down                                             │2h
+  │   g G          top, bottom (preview: G follows live; also home, end)     │2m
+  │   ← → h l      scroll left, right                                        │1%
+  │   enter        preview: attach; Needs, Inbox: the item's first action    │
+  │                                                                          │0s
+  │ Actions on the selected row (tree or right pane)                         │3h
+  │   n e x        new task…, edit task…, cancel task…                       │6h
+▾ │   R b          mark ready (also unblocks), block…                        │dy
+  │   s S p u      start a run…, stop…, park…, resume                        │0m
+  │   m r          message box to the selection; reply to its open question  │
+  │   i            typing mode: keys go to the agent (C-q / M-q leaves)      │
+  │   c            the project's coordinator: attach if live, else start…    │
+  │   v D          review…, deliver…                                         │
+  │   A            acknowledge every notification…                           │
+──│ ↑↓ pgup pgdn scroll · lines 20-38 of 65                                  │──
+ t╰──────────────────────────────────────────────────────────────────────────╯d]
+[q] quit  [?] help  [!] needs  [tab] focus  [.] closed  [n] new  [s] start  [S…

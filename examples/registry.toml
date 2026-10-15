@@ -1,0 +1,100 @@
+# otag registry: accounts (harness login/config dirs) and profiles.
+# Copy to ~/.config/otag/registry.toml (or $OTAG_CONFIG_DIR/registry.toml) and run `otag sync`.
+#
+# account keys:  harness (claude|codex|opencode), config_dir, command (binary or wrapper), env,
+#                quota (table: disabled, oauth_usage (claude), litellm_provider (opencode); docs/QUOTA.md)
+# profile keys:  account, model, effort, mode (interactive|headless), tags, fallback (ordered),
+#                env, env_passthrough, args, description
+# Tags are informational only; otag never picks a profile by tag.
+
+# ---------------------------------------------------------------- accounts
+
+[accounts.claude]
+harness = "claude"
+config_dir = "~/.claude"
+# [accounts.claude.quota]
+# oauth_usage = true   # undocumented usage endpoint, Keychain token read-only; off by default
+
+# A second Claude account in its own config dir (log in once with
+# `CLAUDE_CONFIG_DIR=~/.claude-work claude`). Uncomment it and the profile below that uses it.
+# [accounts.claude-work]
+# harness = "claude"
+# config_dir = "~/.claude-work"
+
+[accounts.codex]
+harness = "codex"
+config_dir = "~/.codex"
+
+[accounts.opencode]
+harness = "opencode"
+# No config_dir: use your normal opencode setup (~/.config/opencode, ~/.local/share/opencode).
+# For an isolated account, config_dir is an account ROOT, not the opencode config dir: otag sets
+# XDG_CONFIG_HOME=<root>/config, XDG_DATA_HOME=<root>/data, XDG_STATE_HOME=<root>/state and
+# XDG_CACHE_HOME=<root>/cache, so the config lives in <root>/config/opencode/opencode.json.
+# config_dir = "~/.opencode-work"
+# command = "opencode"   # a binary on PATH, or a wrapper script (e.g. "~/bin/my-opencode")
+# [accounts.opencode.env]
+# SOME_VARIABLE = "value"   # extra environment for runs of this account
+# [accounts.opencode.quota]
+# litellm_provider = "litellm"   # provider in opencode.json whose /key/info is read (docs/QUOTA.md)
+
+# Scripted test/demo harness: runs the steps in the profile's args and reports them through
+# `otag event fake <kind>` like real hooks would. Costs nothing.
+[accounts.fake]
+harness = "fake"
+
+# ---------------------------------------------------------------- profiles
+
+[profiles.claude-opus-high]
+account = "claude"
+model = "opus"
+effort = "high"
+tags = ["smart", "coordinator"]
+fallback = ["codex-gpt-high"]   # tried in order when this profile's account hits a limit
+description = "Coordinator and hard tasks"
+
+# [profiles.claude-opus-high-work]
+# account = "claude-work"
+# model = "opus"
+# effort = "high"
+# fallback = ["codex-gpt-high"]
+
+[profiles.claude-sonnet-high]
+account = "claude"
+model = "sonnet"
+effort = "high"
+tags = ["fast", "review"]
+fallback = ["claude-sonnet-med", "opencode-default"]
+
+[profiles.claude-sonnet-med]
+account = "claude"
+model = "sonnet"
+effort = "medium"
+tags = ["fast", "cheap"]
+fallback = ["opencode-default"]
+
+[profiles.codex-gpt-high]
+account = "codex"
+model = "gpt-5.5"
+effort = "high"
+tags = ["smart", "review"]
+fallback = ["claude-sonnet-high"]
+
+[profiles.codex-gpt-headless]
+account = "codex"
+model = "gpt-5.5"
+effort = "medium"
+mode = "headless"   # no interactive pane; interactive is the default
+tags = ["batch"]
+
+[profiles.opencode-default]
+account = "opencode"
+model = "provider/model"   # as OpenCode names it: <provider>/<model>
+tags = ["cheap", "fast"]
+env = { EXAMPLE_FLAG = "1" }                # fixed environment for runs of this profile
+env_passthrough = ["MY_PROVIDER_API_KEY"]   # variables of otag's own environment to pass on (* matches a prefix)
+
+[profiles.fake-demo]
+account = "fake"
+args = ["start", "busy", "tool", "idle", "busy", "commit", "done:demo finished", "wait"]
+description = "Try otag without tokens: commits a line and calls otag done"

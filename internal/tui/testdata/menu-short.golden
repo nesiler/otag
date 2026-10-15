@@ -1,0 +1,16 @@
+ otag │ ⚑ 2 needs you │ ✉ 2 │ ⇪ 1 to deliver │ daemon ○ │ c2 91% (5h)
+▾ alpha  strict                                                 6 open · 2 ready
+    ○ coord sonnet          ╭──────────────────────────────────────────────────╮
+  ▾ ⇪ Ready to deliver (1)  │ Start run…      s                                │
+    ▸ ⇪ al-9 Add CSV export │ Attach          enter  — task al-13 has no run   │
+  ▾ ? al-14 Ask about colors│ Type into pane  i      — task al-13 has no run   │
+      ? r1 sonnet           │ Message task    m                                │
+    ⊘ al-16 Blocked thing   │ Reply           r      — no open question here   │
+  ▾ ● al-12 Fix login       │ Review…         v      — select a task in review │
+      ● r2 sonnet           │ Deliver…        D                                │
+      +1 earlier            │ Edit…           e                                │
+      · al-17 Review of al-1│ Mark ready      R                                │
+    · al-13 Docs            │ Block…          b                                │
+── message ─────────────────│ Cancel…         x                                │
+ to: al-13 ▾  info ▾  m: mes│ Resume          u                                │
+[q] quit  [?] help  [!] need╰──────────────────────────────────────────────────╯

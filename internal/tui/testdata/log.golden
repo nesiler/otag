@@ -1,0 +1,40 @@
+ otag │ ⚑ 2 needs you │ ✉ 2 │ ⇪ 1 to deliver │ daemon ○ │ c2 91% (5h)
+▾ alpha  strict              6 open · 2 ready│ 1 Preview │ 2 Details │ 3 Needs 2 │ 4 Inbox 2 │ 5 Stats │ 6 Log
+    ○ coord sonnet               idle 2h q91%│actions of this session
+  ▾ ⇪ Ready to deliver (1)                   │12:00:00 ✓ otag --project alpha task ready al-13
+    ▸ ⇪ al-9 Add CSV export           done 3h│    ok: --project alpha task ready al-13
+  ▾ ? al-14 Ask about colors       waiting 5m│12:00:00 ✕ otag --project alpha task ready al-13
+      ? r1 sonnet            waiting 20m q91%│    CONFLICT: busy
+    ⊘ al-16 Blocked thing          blocked 2h│
+  ▾ ● al-12 Fix login          running p1 12m│
+      ● r2 sonnet            running 12m q91%│
+      +1 earlier                             │
+      · al-17 Review of al-12       ready 30s│
+    · al-13 Docs                  ready p2 3h│
+    ◌ al-15 Draft idea              draft 26h│
+▾ beta  light                1 open · 1 ready│
+    · be-1 Beta thing               ready 50m│
+                                             │
+                                             │
+                                             │
+                                             │
+                                             │
+                                             │
+                                             │
+                                             │
+                                             │
+                                             │
+                                             │
+                                             │
+                                             │
+                                             │
+                                             │
+                                             │
+                                             │
+                                             │
+                                             │
+                                             │
+                                             │
+── message ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ to: al-13 ▾  info ▾  m: message al-13 · r: reply to a question                                                   [Send]
+[q] quit  [?] help  [!] needs  [tab] focus  [.] closed  [n] new  [s] start  [S] stop  … task ready al-13: CONFLICT: busy

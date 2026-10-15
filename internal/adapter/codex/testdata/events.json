@@ -1,0 +1,20 @@
+[
+ {"kind":"SessionStart","payload":{"session_id":"thread-1","transcript_path":"/tmp/rollout.jsonl","source":"startup"},"types":["session_start"]},
+ {"kind":"UserPromptSubmit","payload":{"session_id":"thread-1","turn_id":"turn-1"},"types":["turn_start"]},
+ {"kind":"PreToolUse","payload":{"session_id":"thread-1","tool_name":"Bash","tool_use_id":"call-1","tool_input":{"command":"printf '%s' hello"}},"types":["activity"]},
+ {"kind":"PreToolUse","payload":{"session_id":"thread-1","tool_name":"request_user_input_async","tool_input":{"questions":[{"question":"Which option?"}]}},"types":["question"]},
+ {"kind":"Stop","payload":{"session_id":"thread-1","turn_id":"turn-1","last_assistant_message":"OK"},"types":["turn_end"]},
+ {"kind":"Interrupt","payload":{"session_id":"thread-1","turn_id":"turn-2"},"types":["turn_end"]},
+ {"kind":"SessionEnd","payload":{"session_id":"thread-1","reason":"exit"},"types":["session_end"]},
+ {"kind":"thread/status/changed","payload":{"threadId":"thread-1","status":{"type":"active","activeFlags":["waitingOnApproval"]}},"types":["permission"]},
+ {"kind":"thread/status/changed","payload":{"threadId":"thread-1","status":{"type":"active","activeFlags":["waitingOnUserInput"]}},"types":["question"]},
+ {"kind":"turn/completed","payload":{"threadId":"thread-1","turn":{"id":"turn-1","status":"completed","items":[{"id":"m1","type":"agentMessage","text":"OK"}]}},"types":["turn_end"]},
+ {"kind":"turn/completed","payload":{"threadId":"thread-1","turn":{"id":"turn-3","status":"failed","error":{"message":"model is not supported","codexErrorInfo":"badRequest"},"items":[]}},"types":["error","turn_end"]},
+ {"kind":"error","payload":{"threadId":"thread-1","turnId":"turn-4","willRetry":false,"error":{"message":"limit reached","codexErrorInfo":"usageLimitExceeded"}},"types":["error","rate_limit","turn_end"]},
+ {"kind":"error","payload":{"threadId":"thread-1","turnId":"turn-5","willRetry":true,"error":{"message":"stream disconnected","codexErrorInfo":"responseStreamDisconnected"}},"types":["error"]},
+ {"kind":"thread/tokenUsage/updated","payload":{"threadId":"thread-1","turnId":"turn-1","model":"gpt-6.1-sol","tokenUsage":{"total":{"inputTokens":20,"outputTokens":5,"cachedInputTokens":4,"reasoningOutputTokens":2,"totalTokens":25},"last":{"inputTokens":20,"outputTokens":5,"cachedInputTokens":4,"reasoningOutputTokens":2,"totalTokens":25}}},"types":["usage"]},
+ {"kind":"item/started","payload":{"threadId":"thread-1","turnId":"turn-1","item":{"id":"i1","type":"commandExecution","command":"echo hello"}},"types":["activity"]},
+ {"kind":"account/rateLimits/updated","payload":{"rateLimits":{"primary":{"usedPercent":100,"resetsAt":1791215285}}},"types":["rate_limit"]},
+ {"kind":"thread/closed","payload":{"threadId":"thread-1"},"types":[]},
+ {"kind":"item/agentMessage/delta","payload":{"threadId":"thread-1","delta":"hello"},"types":[]}
+]

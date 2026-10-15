@@ -1,0 +1,16 @@
+ otag │ ⚑ 2 needs you │ ✉ 2 │ ⇪ 1 to deliver │ daemon ○ │ c2 91% (5h)
+▾ ╭──────────────────────────────────────────────────────────────────────────╮dy
+  │ Deliver al-9                                                             │1%
+  │                                                                          │
+  │ task al-9 Add CSV export (done)                                          │3h
+  │ branch otag/al-9                                                         │5m
+  │ worktree (none recorded)                                                 │1%
+  │ The worktree will be removed; the branch is kept.                        │2h
+  │                                                                          │2m
+  │ Note:                                                                    │1%
+  │ [ ] delete the branch if it is merged                                    │
+  │ [ ] force: remove worktrees with uncommitted changes (they are lost)     │0s
+  │                                                                          │3h
+──│ [ Deliver ]  [ Cancel ]                                                  │──
+ t╰──────────────────────────────────────────────────────────────────────────╯d]
+[q] quit  [?] help  [!] needs  [tab] focus  [.] closed  [n] new  [s] start  [S…

@@ -1,0 +1,25 @@
+# One file per project: ~/.config/otag/projects/<name>.toml. The file name is the
+# project name unless `name` is set. Unknown keys are kept (projects.config JSON).
+
+# name = "myapp"                          # optional; defaults to the file name
+path = "~/dev/projects/myapp"
+prefix = "app"                            # task ids: app-x3f
+
+coordinator_profile = "claude-opus-high"
+default_profile = "claude-sonnet-high"
+review_profile = "codex-gpt-high"         # reviews should use a different model family
+
+workspace = "worktree"                    # worktree (git worktree + branch per task) | same
+
+# Paths the agents must not read or write (a light guard adds ".env*" itself).
+deny = [".env*", "secrets/**", "*.pem"]
+
+# Guard level of the project's runs (docs/ADAPTERS.md, "Threat model"):
+#   light  (default) only push, git on other refs/checkouts, file-tool writes and rm -r
+#          outside the worktree, and deny-glob files are refused; no native sandbox, the
+#          environment is inherited without secrets
+#   strict the full guard behind Claude's sandbox / Codex permissions.otag, clean env
+guard = "light"
+
+# Extra fields are allowed and stored as-is.
+issue_tracker = "github"

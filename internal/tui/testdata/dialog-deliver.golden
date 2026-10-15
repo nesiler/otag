@@ -1,0 +1,24 @@
+ otag │ ⚑ 2 needs you │ ✉ 2 │ ⇪ 1 to deliver │ daemon ○ │ c2 91% (5h)
+▾ alpha  strict                                                 6 open · 2 ready
+    ○ coord sonnet                                                  idle 2h q91%
+  ▾ ⇪ Ready to deliver (1)
+    ▸ ⇪ al-9 Add CSV export                                              done 3h
+  ╭──────────────────────────────────────────────────────────────────────────╮5m
+  │ Deliver al-9                                                             │1%
+  │                                                                          │2h
+  │ task al-9 Add CSV export (done)                                          │2m
+  │ branch otag/al-9                                                         │1%
+  │ worktree (none recorded)                                                 │
+  │ The worktree will be removed; the branch is kept.                        │0s
+  │                                                                          │3h
+  │ Note:                                                                    │6h
+▾ │ [ ] delete the branch if it is merged                                    │dy
+  │ [ ] force: remove worktrees with uncommitted changes (they are lost)     │0m
+  │                                                                          │
+  │ [ Deliver ]  [ Cancel ]                                                  │
+  ╰──────────────────────────────────────────────────────────────────────────╯
+
+
+── message ─────────────────────────────────────────────────────────────────────
+ to: al-9 ▾  info ▾  m: message al-9 · r: reply to a question             [Send]
+[q] quit  [?] help  [!] needs  [tab] focus  [.] closed  [n] new  [s] start  [S…
