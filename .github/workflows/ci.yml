@@ -37,6 +37,11 @@ jobs:
         run: go vet ./...
       - name: go test
         run: go test -race ./...
+      # A new user's first run with the real binary (temporary HOME, stub agent CLIs):
+      # `otag init --yes --no-daemon`, then `otag doctor` without failures. It is part of
+      # the run above too; here it runs on its own, verbosely, and must not be skipped (CI=true).
+      - name: first-run e2e
+        run: go test -count=1 -run TestFreshUserE2E -v ./internal/cli
 
   lint:
     runs-on: macos-latest
