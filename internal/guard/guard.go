@@ -42,6 +42,9 @@ type Policy struct {
 	// no branch may be moved). Only it may be
 	// force-moved or deleted (`git branch -f/-D/-M`, `checkout -B`).
 	Branch string
+	// Detached: Workdir is a detached review checkout (Branch ""): at both levels HEAD
+	// must stay detached and no ref may be created, moved or deleted (detached.go).
+	Detached bool
 	// Level selects the rule set (level.go); "" is strict.
 	Level Level
 
@@ -392,6 +395,9 @@ func (p Policy) checkCommand(cmd string, depth int) Decision {
 	// obvious dangerous git ones written inside them.
 	if dangerousGit(cmd, p.Level) {
 		return deny("a git push or ref change inside $(...), backticks, eval or a variable cannot be inspected; run it as a plain command")
+	}
+	if p.Detached && detachedText(cmd) {
+		return deny(detachedDenied + "; a git command inside $(...), backticks, eval or a variable cannot be inspected")
 	}
 	// The shell's directory before each open subshell, restored when it closes.
 	type dir struct {

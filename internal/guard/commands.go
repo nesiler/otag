@@ -390,6 +390,11 @@ func (p Policy) checkGit(name string, args []string) Decision {
 	if light && slices.Contains(worktreeGit, sub) && !p.cwdUnknown && len(g.trees) == 0 && !p.Inside(dir) {
 		return deny("git %s in %s would change another checkout; git may only act on this worktree (%s)", sub, dir, p.Workdir)
 	}
+	if p.Detached {
+		if d := p.checkDetached(sub, rest, dir); !d.Allow {
+			return d
+		}
+	}
 	switch sub {
 	case "push", "send-pack", "http-push":
 		return deny(pushDenied)

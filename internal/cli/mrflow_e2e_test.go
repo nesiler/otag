@@ -94,7 +94,9 @@ args = ["start", "busy", "commit", "done:did it", "wait"]
 	// The review run: detached at the reviewed head, no branch of its own.
 	h.start(reviewTask)
 	rv := h.waitRun(reviewTask+"-r1", "review idle", func(r run.Run) bool { return r.Status == run.Idle })
-	if rv.Role != "review" || rv.Workspace == nil || rv.Workspace.Branch != "" || rv.Workspace.BaseSHA != head {
+	// The project has no guard key: light, no native sandbox, so the hook guard alone
+	// keeps the detached checkout detached.
+	if rv.Guard != "light" || rv.Role != "review" || rv.Workspace == nil || rv.Workspace.Branch != "" || rv.Workspace.BaseSHA != head {
 		t.Fatalf("review run %s workspace %+v (head %s)", rv.Role, rv.Workspace, head)
 	}
 	if got := gitIn(t, rv.Workspace.Path, "rev-parse", "HEAD"); got != head {
@@ -119,7 +121,8 @@ args = ["start", "busy", "commit", "done:did it", "wait"]
 		return out
 	}
 	for _, cmd := range []string{"git push origin HEAD", "git branch -f main HEAD", "git branch -D team/" + id,
-		"git checkout -B team/" + id, "git update-ref refs/heads/main HEAD"} {
+		"git checkout -B team/" + id, "git update-ref refs/heads/main HEAD", "git switch main", "git checkout main",
+		"git checkout -b scratch", "git switch -c scratch", "git branch scratch", "git tag v1"} {
 		if out := pre(cmd); !strings.Contains(out, `"decision":"deny"`) {
 			t.Errorf("review guard allowed %q: %s", cmd, out)
 		}
@@ -127,7 +130,8 @@ args = ["start", "busy", "commit", "done:did it", "wait"]
 	if out := pre("git push origin HEAD"); !strings.Contains(out, "otag task push") {
 		t.Errorf("push denial does not point to otag task push: %s", out)
 	}
-	for _, cmd := range []string{"git log --oneline", "git diff " + devSHA + "..." + head, "go test ./..."} {
+	for _, cmd := range []string{"git log --oneline", "git diff " + devSHA + "..." + head, "go test ./...",
+		"git switch --detach " + devSHA, "git checkout -- dev.txt", "git commit -m scratch"} {
 		if out := pre(cmd); out != `{"decision":"allow"}` {
 			t.Errorf("review guard refused %q: %s", cmd, out)
 		}

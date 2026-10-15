@@ -303,13 +303,15 @@ func endsLastSession(ctx context.Context, q db.Querier, runID, sid string) bool 
 
 func loadHookContext(ctx context.Context, q db.Querier, runID string, hc *adapter.HookContext) (bool, error) {
 	var deny, level string
-	// The run keeps the level it started with; runs from before levels are strict.
+	// The run keeps the level it started with; runs from before levels are strict. A
+	// worktree without a branch is a detached review checkout.
 	err := q.QueryRowContext(ctx, `
 SELECT r.id, coalesce(r.task_id, ''), r.role, r.status, coalesce(w.path, ''), coalesce(w.branch, ''), p.deny,
-       coalesce(r.guard, 'strict')
+       coalesce(r.guard, 'strict'), coalesce(w.mode = 'worktree' AND w.branch IS NULL, 0)
 FROM runs r JOIN projects p ON p.id = r.project_id
 LEFT JOIN workspaces w ON w.id = (SELECT max(id) FROM workspaces WHERE run_id = r.id)
-WHERE r.id = ?`, runID).Scan(&hc.RunID, &hc.TaskID, &hc.Role, &hc.Status, &hc.Workdir, &hc.Branch, &deny, &level)
+WHERE r.id = ?`, runID).Scan(&hc.RunID, &hc.TaskID, &hc.Role, &hc.Status, &hc.Workdir, &hc.Branch, &deny, &level,
+		&hc.Detached)
 	hc.Guard = guard.Level(level)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil

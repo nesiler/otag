@@ -321,8 +321,11 @@ type HookContext struct {
 	Status  string // run status
 	Workdir string
 	Branch  string // the run's branch; "" in same mode or a detached review worktree
-	Deny    []string
-	Guard   guard.Level // the level the run started with ("" = strict)
+	// Detached: the run works in a detached review worktree (no own branch; HEAD must
+	// stay detached and no ref may change: guard.Policy.Detached).
+	Detached bool
+	Deny     []string
+	Guard    guard.Level // the level the run started with ("" = strict)
 	// DB, TmuxSocket and OtagBin are otag's own database, tmux socket name and binary,
 	// which a child's guard keeps the agent away from (GuardPolicy).
 	DB, TmuxSocket, OtagBin string
@@ -333,7 +336,8 @@ type HookContext struct {
 // level's defaults), own branch and, for every role but the coordinator, otag's own
 // state. Adapters add Cwd and AllowOutside.
 func (hc HookContext) GuardPolicy() guard.Policy {
-	pol := guard.Policy{Workdir: hc.Workdir, Deny: guard.DenyGlobs(hc.Guard, hc.Deny), Branch: hc.Branch, Level: hc.Guard}
+	pol := guard.Policy{Workdir: hc.Workdir, Deny: guard.DenyGlobs(hc.Guard, hc.Deny), Branch: hc.Branch, Level: hc.Guard,
+		Detached: hc.Detached}
 
 	if hc.Role != "coordinator" {
 		pol.DB, pol.TmuxSocket, pol.OtagBin = hc.DB, hc.TmuxSocket, hc.OtagBin
