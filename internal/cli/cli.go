@@ -77,7 +77,7 @@ func commands() []command {
 		{"project", "projects: add [path] [--name N] [--prefix P] [--guard G] [--yes] | list | remove <name>", cmdProject},
 		{"sync", "validate the TOML registry and sync it into the database", cmdSync},
 		{"profiles", "list profiles [--tag t]", cmdProfiles},
-		{"task", "manage tasks: add|list|show|edit|cancel|ready|claim|block|deliver|me", cmdTask},
+		{"task", "manage tasks: add|list|show|edit|cancel|ready|claim|block|deliver|push|reopen|me", cmdTask},
 		{"run", "manage runs: start|list|show|stop [--park]|attach|resume", cmdRun},
 		{"status", "task and run overview per project", cmdStatus},
 		{"stats", "usage per model; runs, durations and review reject rate per profile", cmdStats},
@@ -378,12 +378,10 @@ func mutate[T any](ctx context.Context, a *app, key opKey, fn func(tx *sql.Tx) (
 	if err != nil {
 		return out, err
 	}
-	kb, err := json.Marshal(key)
+	hash, err := keyHash(key)
 	if err != nil {
 		return out, err
 	}
-	sum := sha256.Sum256(kb)
-	hash := hex.EncodeToString(sum[:])
 	err = d.Tx(ctx, func(tx *sql.Tx) error {
 		if a.requestID != "" {
 			var storedHash, stored string
@@ -415,6 +413,65 @@ func mutate[T any](ctx context.Context, a *app, key opKey, fn func(tx *sql.Tx) (
 		return err
 	})
 	return out, err
+}
+
+func keyHash(key opKey) (string, error) {
+	kb, err := json.Marshal(key)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(kb)
+	return hex.EncodeToString(sum[:]), nil
+}
+
+// replay is --request-id for a mutation that cannot run inside one transaction (a
+// push talks to a remote first): the stored result of an earlier identical call
+// (replayed = true), else nothing. remember stores the result after success.
+func replay[T any](ctx context.Context, a *app, key opKey) (out T, replayed bool, err error) {
+	if a.requestID == "" {
+		return out, false, nil
+	}
+	d, err := a.openDB(ctx)
+	if err != nil {
+		return out, false, err
+	}
+	hash, err := keyHash(key)
+	if err != nil {
+		return out, false, err
+	}
+	var storedHash, stored string
+	err = d.QueryRowContext(ctx, `SELECT args_hash, result FROM request_log WHERE request_id = ?`, a.requestID).
+		Scan(&storedHash, &stored)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return out, false, nil
+	case err != nil:
+		return out, false, err
+	case storedHash != hash:
+		return out, false, apperr.New(apperr.RequestIDReused, "request id %s was used for a different command", a.requestID)
+	}
+	a.replayed = true
+	return out, true, json.Unmarshal([]byte(stored), &out)
+}
+
+// remember stores out as the result of --request-id (see replay).
+func remember(ctx context.Context, a *app, key opKey, out any) error {
+	if a.requestID == "" {
+		return nil
+	}
+	hash, err := keyHash(key)
+	if err != nil {
+		return err
+	}
+	b, err := json.Marshal(out)
+	if err != nil {
+		return err
+	}
+	return a.db.Tx(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `INSERT INTO request_log (request_id, command, args_hash, result) VALUES (?, ?, ?, ?)
+			ON CONFLICT (request_id) DO NOTHING`, a.requestID, key.Command, hash, string(b))
+		return err
+	})
 }
 
 // opKey identifies a mutation for --request-id. It is hashed as JSON, so repeated

@@ -22,10 +22,10 @@ func cmdTask(ctx context.Context, a *app, args []string) (result, error) {
 	subs := map[string]func(context.Context, *app, []string) (result, error){
 		"add": taskAdd, "list": taskList, "show": taskShow, "edit": taskEdit,
 		"cancel": taskCancel, "ready": taskReady, "claim": taskClaim, "block": taskBlock, "me": taskMe,
-		"deliver": taskDeliver,
+		"deliver": taskDeliver, "push": taskPush, "reopen": taskReopen,
 	}
 	if len(args) == 0 {
-		return result{}, usageErr("usage: otag task add|list|show|edit|cancel|ready|claim|block|deliver|me")
+		return result{}, usageErr("usage: otag task add|list|show|edit|cancel|ready|claim|block|deliver|push|reopen|me")
 	}
 	fn, ok := subs[args[0]]
 	if !ok {
@@ -59,6 +59,8 @@ func taskAdd(ctx context.Context, a *app, args []string) (result, error) {
 	fs.Var(&related, "related", "related task id (repeatable)")
 	fs.StringVar(&parent, "parent", "", "parent task id")
 	fs.StringVar(&reviewOf, "review-of", "", "task this one reviews")
+	fs.StringVar(&in.Base, "base", "", "ref the task branch starts from (default: the project's base)")
+	fs.StringVar(&in.Review, "review", "", "review profile for this task, or none (default: the project's review_profile)")
 	pos, err := parse(fs, args)
 	if err != nil {
 		return result{}, err
@@ -187,6 +189,7 @@ func taskEdit(ctx context.Context, a *app, args []string) (result, error) {
 	fs := a.flagSet("task edit")
 	var (
 		title, body, profile, ref, extra, metaJSON, status, reason string
+		base, review                                               string
 		priority                                                   int
 		version                                                    int64
 		meta, addDep, rmDep                                        multi
@@ -203,6 +206,8 @@ func taskEdit(ctx context.Context, a *app, args []string) (result, error) {
 	fs.Var(&rmDep, "rm-dep", "kind:task-id (repeatable)")
 	fs.StringVar(&status, "status", "", "move to status (state machine enforced)")
 	fs.StringVar(&reason, "reason", "", "reason for --status")
+	fs.StringVar(&base, "base", "", "ref the task branch starts from ('' = the project's; refused once the worktree exists)")
+	fs.StringVar(&review, "review", "", "review profile, none, or '' for the project's review_profile")
 	fs.Int64Var(&version, "version", 0, "expected task version (CAS)")
 	pos, err := parse(fs, args)
 	if err != nil {
@@ -226,6 +231,10 @@ func taskEdit(ctx context.Context, a *app, args []string) (result, error) {
 			in.ExternalRef = &ref
 		case "extra-prompt":
 			in.ExtraPrompt = &extra
+		case "base":
+			in.Base = &base
+		case "review":
+			in.Review = &review
 		}
 	})
 	if metaJSON != "" {
@@ -353,8 +362,8 @@ func taskDeliver(ctx context.Context, a *app, args []string) (result, error) {
 	fs := a.flagSet("task deliver")
 	var in run.DeliverInput
 	fs.StringVar(&in.Note, "note", "", "how it was delivered (kept as the status reason)")
-	fs.BoolVar(&in.DeleteBranch, "delete-branch", false, "delete the task branch if the default branch contains it")
-	fs.BoolVar(&in.Force, "force", false, "remove worktrees with uncommitted changes (the changes are lost)")
+	fs.BoolVar(&in.DeleteBranch, "delete-branch", false, "delete the task branch if the default branch contains it (with --force: also unmerged, e.g. after a squash merge)")
+	fs.BoolVar(&in.Force, "force", false, "remove worktrees with uncommitted changes (the changes are lost); with --delete-branch, delete an unmerged branch")
 	pos, err := parse(fs, args)
 	if err != nil {
 		return result{}, err
@@ -576,6 +585,18 @@ func printTask(w io.Writer, t *task.Task) {
 	row("priority", fmt.Sprint(t.Priority))
 	row("version", fmt.Sprint(t.Version))
 	row("profile", t.Profile)
+	row("base", t.Base)
+	row("branch", t.Branch)
+	switch t.Review {
+	case task.ReviewNone:
+		row("review", "none (this task is not reviewed)")
+	case "":
+	default:
+		row("review", t.Review+" (overrides the project's review_profile)")
+	}
+	if p := t.Push; p != nil {
+		row("pushed", fmt.Sprintf("%s to %s/%s at %s", short(p.SHA), p.Remote, p.Branch, p.At))
+	}
 	row("claimed by", t.ClaimedBy)
 	row("run", t.CurrentRunID)
 	row("ref", t.ExternalRef)

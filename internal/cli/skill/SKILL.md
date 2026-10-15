@@ -15,10 +15,14 @@ task or project, the otag commands open to you and your unread messages.
 
 Core commands:
 - `otag status`, `otag needs`: project overview; what waits for you
-- `otag task add "title" --body "..."`, `otag task list`, `otag task show <id>`
+- `otag task add "title" --body "..." [--base <ref>] [--review <profile|none>]`, `otag task list`, `otag task show <id>`
 - `otag run start <task> --no-attach`, `otag run stop <run>`
 - `otag inbox`, `otag reply <id> "text"`, `otag send <run|task|coord|human> "text"`
 - `otag review <task> --accept|--reject "reason"`
+- Merge/pull requests: `otag task push <task> [--force]` (if the project allows it), then
+  `glab mr create` / `gh pr create`; `otag task reopen <task> "reason"` when CI or review
+  sends a done task back
 
 Inside a run you are a child: finish with `otag done "summary"` (or `otag fail "reason"`),
-ask the coordinator with `otag ask "question"`, and never push or merge.
+ask the coordinator with `otag ask "question"`, and never run git push or merge (`otag
+prime` says whether you may use `otag task push`).
