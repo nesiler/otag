@@ -8,7 +8,7 @@ A command tent for your AI coding agents.
 [![License: MIT](https://img.shields.io/github/license/nesiler/otag)](LICENSE)
 ![Platform: macOS](https://img.shields.io/badge/platform-macOS-lightgrey)
 
-<!-- TODO: docs/assets/tui.gif -->
+<p align="center"><img src="docs/assets/tui.gif" alt="otag tui: task tree, live agent preview, Needs tab, context menu and help overlay" width="900"></p>
 
 ## What is otag?
 
