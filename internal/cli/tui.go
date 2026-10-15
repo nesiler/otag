@@ -14,6 +14,8 @@ import (
 
 	"github.com/nesiler/otag/internal/apperr"
 	"github.com/nesiler/otag/internal/paths"
+	"github.com/nesiler/otag/internal/registry"
+	"github.com/nesiler/otag/internal/setup"
 	"github.com/nesiler/otag/internal/tmux"
 	"github.com/nesiler/otag/internal/tui"
 )
@@ -32,7 +34,7 @@ func cmdTui(ctx context.Context, a *app, args []string) (result, error) {
 		return result{}, usageErr("usage: otag tui [--project P]")
 	case a.json:
 		return result{}, usageErr("otag tui is interactive: it has no --json output")
-	case !isTerminal(a.env.Stdin) || !isTerminal(a.env.Stdout):
+	case !a.terminal():
 		return result{}, usageErr("otag tui needs a terminal on stdin and stdout")
 	}
 	socket := paths.TmuxSocket(a.env.Getenv)
@@ -65,14 +67,16 @@ func cmdTui(ctx context.Context, a *app, args []string) (result, error) {
 		return a.tuiCall(ctx, args...)
 	}
 	err = tui.Run(ctx, tui.Options{
-		DB:      d,
-		Tmux:    tc,
-		Getenv:  a.env.Getenv,
-		DataDir: paths.DataDir(a.env.Getenv),
-		Project: project,
-		Text:    a.tuiText,
-		Call:    call,
-		Environ: a.env.Environ,
+		DB:           d,
+		Tmux:         tc,
+		Getenv:       a.env.Getenv,
+		DataDir:      paths.DataDir(a.env.Getenv),
+		Project:      project,
+		Text:         a.tuiText,
+		Call:         call,
+		Environ:      a.env.Environ,
+		Unconfigured: !a.configured(),
+		AddDir:       a.addableRepo(ctx),
 	})
 	if n := running.Load(); n > 0 {
 		_, _ = fmt.Fprintf(a.env.Stderr, "otag tui: waiting for %d action(s) to finish (ctrl+c to stop)\n", n)
@@ -81,6 +85,28 @@ func cmdTui(ctx context.Context, a *app, args []string) (result, error) {
 		a.db = nil // still in use: the process exit closes it
 	}
 	return result{}, err
+}
+
+// addableRepo is the git repository of the working directory when otag is set up and
+// no project uses it ("" otherwise): the TUI offers to add it.
+func (a *app) addableRepo(ctx context.Context) string {
+	if !a.configured() || a.env.Cwd == "" {
+		return ""
+	}
+	repo := a.prober().Repo(ctx, a.env.Cwd)
+	if repo == "" {
+		return ""
+	}
+	cfg, err := registry.Load(a.configDir(), a.env.Getenv)
+	if err != nil {
+		return ""
+	}
+	for _, p := range cfg.Projects {
+		if setup.SamePath(p.Path, repo) {
+			return ""
+		}
+	}
+	return repo
 }
 
 // insideSocket reports whether $TMUX (socket path,server pid,session) names the server

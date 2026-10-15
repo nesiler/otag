@@ -44,6 +44,9 @@ type Env struct {
 	Cwd     string
 	// Build identifies the binary for `otag version`; see ResolveBuild.
 	Build Build
+	// Terminal reports whether stdin and stdout are a terminal (nil: check the files).
+	Terminal func() bool
+	ui       *uiHooks // tests: the wizard and the TUI
 }
 
 type app struct {
@@ -70,6 +73,8 @@ type command struct {
 
 func commands() []command {
 	return []command{
+		{"init", "set up otag (wizard): otag init [--yes] [--no-daemon] [--force]", cmdInit},
+		{"project", "projects: add [path] [--name N] [--prefix P] [--guard G] [--yes] | list | remove <name>", cmdProject},
 		{"sync", "validate the TOML registry and sync it into the database", cmdSync},
 		{"profiles", "list profiles [--tag t]", cmdProfiles},
 		{"task", "manage tasks: add|list|show|edit|cancel|ready|claim|block|deliver|me", cmdTask},
@@ -81,7 +86,7 @@ func commands() []command {
 		{"inbox", "your messages: otag inbox [--wait] [--peek] [--all]", cmdInbox},
 		{"reply", `reply to a message: otag reply <msg-id> "text" (answers an open question)`, cmdReply},
 		{"needs", "what waits for you: open questions, unknown deliveries, blocked tasks, idle runs", cmdNeeds},
-		{"tui", "full-screen view of projects, tasks and runs with a live preview: otag tui [--project P]", cmdTui},
+		{"tui", "full-screen view of projects, tasks and runs with a live preview: otag tui [--project P]", func(ctx context.Context, a *app, args []string) (result, error) { return a.runTUI(ctx, args) }},
 		{"coord", "start or attach the project's coordinator: otag coord <project>", cmdCoord},
 		{"review", `record a review: otag review <task> --accept ["note"] | --reject "reason"`, cmdReview},
 		{"done", `child: finish the run: otag done "summary"`, cmdDone},
@@ -116,13 +121,26 @@ func Main(ctx context.Context, args []string, env Env) int {
 	}
 	switch {
 	case errors.Is(err, flag.ErrHelp):
-		a.usage()
+		a.usage(a.env.Stdout)
 		return ExitOK
 	case err != nil:
 		return a.finish(result{}, usageErr("%v", err))
 	case len(rest) == 0:
-		a.usage()
-		return a.finish(result{}, usageErr("missing command"))
+		// Bare otag: the setup wizard on a fresh machine, else the TUI; without a
+		// terminal (or with --json) the usage and a hint.
+		if a.json || !a.terminal() {
+			a.usage(a.env.Stderr)
+			if a.configured() {
+				_, _ = fmt.Fprintln(a.env.Stderr, "\nhint: run `otag tui` in a terminal for the full-screen view")
+			} else {
+				_, _ = fmt.Fprintln(a.env.Stderr, "\nhint: otag is not set up yet: run `otag init` to set up (`otag init --yes` without a terminal)")
+			}
+			return a.finish(result{}, usageErr("missing command"))
+		}
+		rest = []string{"tui"}
+		if !a.configured() {
+			rest = []string{"init"}
+		}
 	}
 	switch rest[0] {
 	case "event":
@@ -143,7 +161,7 @@ func Main(ctx context.Context, args []string, env Env) int {
 		}
 	}
 	if rest[0] == "help" {
-		a.usage()
+		a.usage(a.env.Stdout)
 		return ExitOK
 	}
 	return a.finish(result{}, usageErr("unknown command %q", rest[0]))
@@ -214,9 +232,9 @@ func (a *app) childGate(ctx context.Context, args []string) error {
 // and no OTAG_RUN_ID.
 var callerCommands = []string{"ask", "inbox", "reply", "send", "review", "prime"}
 
-func (a *app) usage() {
-	w := a.env.Stderr
+func (a *app) usage(w io.Writer) {
 	_, _ = fmt.Fprintln(w, "usage: otag [--json] [--project P] [--run R] [--request-id ID] <command> [args]\n       otag --version")
+	_, _ = fmt.Fprintln(w, "       otag              (in a terminal: the setup wizard on first run, then the TUI)")
 	_, _ = fmt.Fprintln(w, "\ncommands:")
 	for _, c := range commands() {
 		_, _ = fmt.Fprintf(w, "  %-9s %s\n", c.name, c.summary)

@@ -278,7 +278,7 @@ func TestPhase4Commands(t *testing.T) {
 		code, e := h.json(c.args...)
 		wantCode(t, strings.Join(c.args, " "), code, e, c.code)
 	}
-	_, _, errs := h.run("help")
+	_, errs, _ := h.run("help") // explicit help goes to stdout
 	for _, c := range []string{"send", "inbox", "reply", "ask", "needs", "coord", "review", "stats"} {
 		if !strings.Contains(errs, "\n  "+c+" ") {
 			t.Errorf("usage lacks %s", c)
