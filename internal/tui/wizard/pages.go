@@ -109,6 +109,9 @@ func (m *Model) agentsForm() *form.Form {
 	for _, a := range m.c.Accounts {
 		t := m.o.Base.Detect.Harness(a.Harness)
 		label := fmt.Sprintf("%s (%s)  %s", setup.HarnessTitle(a.Harness), a.Harness, orDash(t.Version))
+		if a.ConfigDir != "" {
+			label += "  config_dir " + m.home(a.ConfigDir)
+		}
 		fields = append(fields, check("acc:"+a.Harness, label, a.On))
 		on[a.Harness] = a.On
 	}

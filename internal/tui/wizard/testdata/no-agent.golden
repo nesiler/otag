@@ -8,7 +8,7 @@
 │                                                                              │
 │ Found on this Mac:                                                           │
 │   ✗ Claude Code  not found: curl -fsSL https://claude.ai/install.sh | bash   │
-│   ✗ Codex CLI    not found: npm install -g @openai/codex                     │
+│   ✗ Codex CLI    not found: brew install --cask codex                        │
 │   ✗ OpenCode     not found: curl -fsSL https://opencode.ai/install | bash    │
 │   ✓ tmux         tmux 3.5a                                                   │
 │   ✓ git          git version 2.50.1                                          │

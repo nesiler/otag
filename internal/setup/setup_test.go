@@ -411,9 +411,9 @@ func TestForceBacksUp(t *testing.T) {
 	if got := mustRead(t, f.Path); !strings.Contains(got, "[profiles.claude-opus]") {
 		t.Fatalf("new registry:\n%s", got)
 	}
-	// A second backup with the same name is refused, never overwritten.
+	// Writing the same files again is refused: registry.toml is no longer the file they were computed from.
 	if err := Write(files); err == nil {
-		t.Fatal("the backup was overwritten")
+		t.Fatal("a stale change was written")
 	}
 	if entries, _ := os.ReadDir(dir); len(entries) != 2 {
 		t.Fatalf("temporary files left: %v", entries)

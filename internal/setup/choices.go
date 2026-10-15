@@ -17,13 +17,15 @@ const (
 	TierFast   = "fast"   // quick, cheap tasks
 )
 
-// Account is a proposed account: one per harness, with no config_dir (each adapter
-// then uses the harness's own default login: ~/.claude, ~/.codex or $CODEX_HOME, and
-// OpenCode's normal ~/.config/opencode).
+// Account is a proposed account: one per harness. Its config_dir is unset (each
+// adapter then uses the harness's default login: ~/.claude, ~/.codex, OpenCode's
+// ~/.config/opencode) unless the environment chose another one ($CLAUDE_CONFIG_DIR,
+// $CODEX_HOME; Tool.CustomConfigDir), which runs would otherwise lose.
 type Account struct {
-	Name    string `json:"name"`
-	Harness string `json:"harness"`
-	On      bool   `json:"on"`
+	Name      string `json:"name"`
+	Harness   string `json:"harness"`
+	ConfigDir string `json:"config_dir,omitempty"`
+	On        bool   `json:"on"`
 }
 
 // Profile is a proposed profile.
@@ -76,7 +78,10 @@ type Base struct {
 	Existing *registry.Config
 	// RegistryExists: registry.toml is on disk (with Force it is backed up and replaced).
 	RegistryExists bool
-	Force          bool
+	// RegistrySum is the sha256 (Sum) of registry.toml when setup read it: a change
+	// computed later is refused if the file no longer has it ("" = not checked).
+	RegistrySum string
+	Force       bool
 	// Known maps every project the database knows, retired ones too, to its prefix: a
 	// new project never takes the prefix of another project's old task ids, and a
 	// project added again gets its old one back.
@@ -178,7 +183,8 @@ func (b Base) Defaults() Choices {
 	var c Choices
 	for _, h := range b.Offered() {
 		name := b.uniqueAccount(h)
-		c.Accounts = append(c.Accounts, Account{Name: name, Harness: h, On: true})
+		c.Accounts = append(c.Accounts, Account{Name: name, Harness: h, On: true,
+			ConfigDir: b.Detect.Harness(h).CustomConfigDir})
 		for _, p := range presets(h, name) {
 			p.Name = b.uniqueProfile(p.Name, c.Profiles)
 			c.Profiles = append(c.Profiles, p)

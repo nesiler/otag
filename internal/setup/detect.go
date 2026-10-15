@@ -24,9 +24,13 @@ type Tool struct {
 	Name    string `json:"name"`
 	Path    string `json:"path,omitempty"`    // "" = not found
 	Version string `json:"version,omitempty"` // the first line of its version output
-	// ConfigDir is the harness's default config directory when it exists (display only;
-	// the generated account leaves config_dir unset, which means this directory).
+	// ConfigDir is the harness's config directory when it exists (display).
 	ConfigDir string `json:"config_dir,omitempty"`
+	// CustomConfigDir is a non-default config directory chosen in the environment
+	// ($CLAUDE_CONFIG_DIR, $CODEX_HOME). The adapters scrub those variables from a
+	// run's environment, so the generated account names it as config_dir; empty, the
+	// account leaves config_dir unset (the harness's default login).
+	CustomConfigDir string `json:"custom_config_dir,omitempty"`
 }
 
 // Found reports whether the tool is on PATH.
@@ -93,7 +97,7 @@ func InstallHint(name string) string {
 	case "claude":
 		return "curl -fsSL https://claude.ai/install.sh | bash"
 	case "codex":
-		return "npm install -g @openai/codex"
+		return "brew install --cask codex"
 	case "opencode":
 		return "curl -fsSL https://opencode.ai/install | bash"
 	case "tmux":
@@ -108,8 +112,10 @@ func InstallHint(name string) string {
 type Prober struct {
 	PATH string // the PATH searched (not the process's own)
 	Home string
-	// CodexHome is $CODEX_HOME ("" = ~/.codex).
-	CodexHome string
+	// CodexHome is $CODEX_HOME ("" = ~/.codex); ClaudeConfigDir is $CLAUDE_CONFIG_DIR
+	// ("" = ~/.claude).
+	CodexHome       string
+	ClaudeConfigDir string
 	// Run runs bin with args and returns its combined output; nil = os/exec with a
 	// 5 s timeout.
 	Run func(ctx context.Context, bin string, args ...string) (string, error)
@@ -143,6 +149,7 @@ func (p Prober) Detect(ctx context.Context, cwd string) Detection {
 		}
 		j.t.Path = path
 		j.t.ConfigDir = p.configDir(j.t.Name)
+		j.t.CustomConfigDir = p.customDir(j.t.Name)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -184,8 +191,36 @@ func (p Prober) repo(ctx context.Context, bin, dir string) string {
 	return ""
 }
 
-// configDir is the harness's default config directory if it exists.
+// customDir is the config directory the environment chose for harness h when it is
+// not the default one ("" otherwise).
+func (p Prober) customDir(h string) string {
+	env, def := "", ""
+	switch h {
+	case "claude":
+		env, def = p.ClaudeConfigDir, ".claude"
+	case "codex":
+		env, def = p.CodexHome, ".codex"
+	default:
+		return ""
+	}
+	if env == "" || !filepath.IsAbs(env) {
+		return ""
+	}
+	env = filepath.Clean(env)
+	if p.Home != "" && SamePath(env, filepath.Join(p.Home, def)) {
+		return ""
+	}
+	return env
+}
+
+// configDir is the harness's config directory if it exists.
 func (p Prober) configDir(h string) string {
+	if dir := p.customDir(h); dir != "" {
+		if st, err := os.Stat(dir); err == nil && st.IsDir() {
+			return dir
+		}
+		return ""
+	}
 	if p.Home == "" {
 		return ""
 	}
@@ -194,10 +229,7 @@ func (p Prober) configDir(h string) string {
 	case "claude":
 		dir = filepath.Join(p.Home, ".claude")
 	case "codex":
-		dir = p.CodexHome
-		if dir == "" {
-			dir = filepath.Join(p.Home, ".codex")
-		}
+		dir = filepath.Join(p.Home, ".codex")
 	case "opencode":
 		dir = filepath.Join(p.Home, ".config", "opencode")
 	default:

@@ -1,6 +1,8 @@
 package setup
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -23,6 +25,34 @@ type File struct {
 	// Content is the whole new file; Added is what it adds (append: the new block).
 	Content []byte `json:"-"`
 	Added   string `json:"-"`
+	// Base is the sha256 of the file the change was computed from (append, replace):
+	// Write refuses when the file no longer has it.
+	Base string `json:"-"`
+}
+
+// Sum is the hex sha256 of b.
+func Sum(b []byte) string {
+	s := sha256.Sum256(b)
+	return hex.EncodeToString(s[:])
+}
+
+// errChanged is the refusal when a file changed under setup.
+func errChanged(path string) error {
+	return apperr.New(apperr.Conflict, "%s changed since otag read it (edited meanwhile?): nothing was written; run the command again", path)
+}
+
+// current reads the registry a change is based on and checks it is still the one
+// the setup started from (Base.RegistrySum).
+func (b Base) current(reg string) ([]byte, string, error) {
+	old, err := os.ReadFile(reg)
+	if err != nil {
+		return nil, "", err
+	}
+	sum := Sum(old)
+	if b.RegistrySum != "" && sum != b.RegistrySum {
+		return nil, "", errChanged(reg)
+	}
+	return old, sum, nil
 }
 
 // File actions.
@@ -63,11 +93,15 @@ func (b Base) Files(c Choices, now time.Time) ([]File, error) {
 		f := File{Path: reg, Action: Create, Content: []byte(RenderRegistry(b, c, now))}
 		f.Added = string(f.Content)
 		if b.RegistryExists {
-			f.Action, f.Backup = Replace, reg+".bak-"+now.Format("20060102-150405")
+			_, sum, err := b.current(reg)
+			if err != nil {
+				return nil, err
+			}
+			f.Action, f.Backup, f.Base = Replace, reg+".bak-"+now.Format("20060102-150405"), sum
 		}
 		files = append(files, f)
 	case len(active) > 0:
-		old, err := os.ReadFile(reg)
+		old, sum, err := b.current(reg)
 		if err != nil {
 			return nil, err
 		}
@@ -76,7 +110,7 @@ func (b Base) Files(c Choices, now time.Time) ([]File, error) {
 		if body != "" && !strings.HasSuffix(body, "\n") {
 			body += "\n"
 		}
-		files = append(files, File{Path: reg, Action: Append, Content: []byte(body + add), Added: add})
+		files = append(files, File{Path: reg, Action: Append, Content: []byte(body + add), Added: add, Base: sum})
 	}
 	if p := c.Project; p != nil {
 		if err := b.CheckProject(*p, c); err != nil {
@@ -185,73 +219,4 @@ func Preflight(configDir string, files []File, getenv paths.Getenv) (*registry.C
 	}
 	cfg.Dir = configDir
 	return cfg, nil
-}
-
-// Write writes files: the backup of a replaced file first (a new file, never
-// overwritten), then each file through a temporary file and a rename, so a reader
-// sees the old or the new content, never a part.
-func Write(files []File) error {
-	for _, f := range files {
-		dir := filepath.Dir(f.Path)
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return err
-		}
-		if f.Action == Create {
-			if _, err := os.Lstat(f.Path); err == nil {
-				return apperr.New(apperr.Conflict, "%s already exists", f.Path)
-			}
-		}
-		if f.Backup != "" {
-			if err := backup(f.Path, f.Backup); err != nil {
-				return fmt.Errorf("back up %s: %w", f.Path, err)
-			}
-		}
-		if err := WriteAtomic(f.Path, f.Content, 0o644); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func backup(from, to string) error {
-	b, err := os.ReadFile(from)
-	if err != nil {
-		return err
-	}
-	out, err := os.OpenFile(to, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-	if err != nil {
-		return err
-	}
-	_, err = out.Write(b)
-	if cerr := out.Close(); err == nil {
-		err = cerr
-	}
-	return err
-}
-
-// WriteAtomic writes data to path through a temporary file in the same directory
-// and a rename.
-func WriteAtomic(path string, data []byte, perm os.FileMode) error {
-	f, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*")
-	if err != nil {
-		return err
-	}
-	tmp := f.Name()
-	_, err = f.Write(data)
-	if serr := f.Sync(); err == nil {
-		err = serr
-	}
-	if cerr := f.Close(); err == nil {
-		err = cerr
-	}
-	if err == nil {
-		err = os.Chmod(tmp, perm)
-	}
-	if err == nil {
-		err = os.Rename(tmp, path)
-	}
-	if err != nil {
-		_ = os.Remove(tmp)
-	}
-	return err
 }

@@ -38,7 +38,7 @@ func TestDoctorFixes(t *testing.T) {
 	if c := cs["registry"]; c.Status != "fail" || c.Fix != "otag init" || !strings.Contains(c.Detail, "not set up yet") {
 		t.Fatalf("registry %+v", c)
 	}
-	if c := cs["harness codex"]; c.Status != "warn" || !strings.Contains(c.Fix, "@openai/codex") {
+	if c := cs["harness codex"]; c.Status != "warn" || !strings.Contains(c.Fix, "brew install --cask codex") {
 		t.Fatalf("codex %+v", c)
 	}
 	if c := cs["daemon"]; c.Status != "warn" || c.Fix != "otag daemon install" {

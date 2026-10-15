@@ -102,9 +102,16 @@ func writeAccountsProfiles(w *strings.Builder, b Base, c Choices, headings bool)
 		if t.Version != "" {
 			about += " (" + t.Version + ")"
 		}
-		fmt.Fprintf(w, "# %s. No config_dir: %s.\n", about, defaultLogin(a.Harness))
+		if a.ConfigDir != "" {
+			fmt.Fprintf(w, "# %s. config_dir: the login $%s named when otag init ran.\n", about, configEnv(a.Harness))
+		} else {
+			fmt.Fprintf(w, "# %s. No config_dir: %s.\n", about, defaultLogin(a.Harness))
+		}
 		fmt.Fprintf(w, "[accounts.%s]\n", a.Name)
 		w.WriteString(kv("harness", quote(a.Harness), ""))
+		if a.ConfigDir != "" {
+			w.WriteString(kv("config_dir", quote(TildePath(a.ConfigDir, b.Home)), ""))
+		}
 		w.WriteString("\n")
 	}
 	if headings {
@@ -146,6 +153,13 @@ func writeAccountsProfiles(w *strings.Builder, b Base, c Choices, headings bool)
 		}
 		w.WriteString("\n")
 	}
+}
+
+func configEnv(h string) string {
+	if h == "claude" {
+		return "CLAUDE_CONFIG_DIR"
+	}
+	return "CODEX_HOME"
 }
 
 func defaultLogin(h string) string {
