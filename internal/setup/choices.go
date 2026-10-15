@@ -53,6 +53,10 @@ type Project struct {
 	Coordinator string   `json:"coordinator_profile,omitempty"`
 	Default     string   `json:"default_profile,omitempty"`
 	Review      string   `json:"review_profile,omitempty"`
+	// AutoName / AutoPrefix: chosen by setup, not by the user. Apply chooses them
+	// again against the database it then reads writable (Base.Refresh).
+	AutoName   bool `json:"-"`
+	AutoPrefix bool `json:"-"`
 }
 
 // DefaultDeny is the deny list of a new project.
@@ -86,6 +90,9 @@ type Base struct {
 	// new project never takes the prefix of another project's old task ids, and a
 	// project added again gets its old one back.
 	Known map[string]string
+	// KnownPaths maps the path of every project the database knows to its name: a
+	// repository added again gets its old name (and so its prefix and tasks) back.
+	KnownPaths map[string]string
 	// DaemonInstalled / SkillInstalled: offered again only when false.
 	DaemonInstalled bool
 	SkillInstalled  bool
@@ -355,11 +362,41 @@ func nearest(refs []Ref, h, tier string, ok func(Ref) bool) (Ref, bool) {
 
 // NewProject proposes a project for the git checkout dir.
 func (b Base) NewProject(dir string, c Choices) Project {
-	name := b.uniqueProjectName(SanitizeName(filepath.Base(dir)))
+	name := b.ProjectName(dir)
 	p := Project{Name: name, Path: dir, Prefix: b.UniquePrefix(name), Workspace: "worktree", Guard: "light",
-		Deny: slices.Clone(DefaultDeny)}
+		Deny: slices.Clone(DefaultDeny), AutoName: true, AutoPrefix: true}
 	p.Coordinator, p.Default, p.Review = DefaultProfiles(b.Refs(c))
 	return p
+}
+
+// ProjectName proposes the name of a project at dir: the name the database knows
+// for that path (a project removed earlier), else the directory's name, numbered
+// while a registered project or another known project has it.
+func (b Base) ProjectName(dir string) string {
+	for path, name := range b.KnownPaths {
+		if SamePath(path, dir) && !b.registered(name) {
+			return name
+		}
+	}
+	return b.uniqueProjectName(SanitizeName(filepath.Base(dir)))
+}
+
+// Refresh chooses p's automatic name and prefix again (after Known and KnownPaths
+// were read anew); what the user chose stays, and CheckProject still refuses a clash.
+func (b Base) Refresh(p *Project) {
+	if p == nil {
+		return
+	}
+	if p.AutoName {
+		p.Name = b.ProjectName(p.Path)
+	}
+	if p.AutoPrefix {
+		p.Prefix = b.UniquePrefix(p.Name)
+	}
+}
+
+func (b Base) registered(name string) bool {
+	return b.Existing != nil && slices.ContainsFunc(b.Existing.Projects, func(p registry.Project) bool { return p.Name == name })
 }
 
 // DefaultProfiles picks a project's coordinator (a Claude profile, the smartest),
@@ -434,10 +471,8 @@ func SanitizeName(s string) string {
 
 func (b Base) uniqueProjectName(name string) string {
 	return unique(name, func(n string) bool {
-		if b.Existing == nil {
-			return false
-		}
-		return slices.ContainsFunc(b.Existing.Projects, func(p registry.Project) bool { return p.Name == n })
+		_, known := b.Known[n] // another repository's (retired) project
+		return known || b.registered(n)
 	})
 }
 

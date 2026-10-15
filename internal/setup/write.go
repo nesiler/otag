@@ -13,20 +13,37 @@ import (
 )
 
 // New config files are 0644 (registry.toml and the project files hold no secrets of
-// their own; an env table that does is the user's to protect); a file setup changes
-// keeps its mode, a backup is 0600.
+// their own; an env table that does is the user's to protect). A file setup changes
+// keeps its mode, and so does its backup (the old file itself, moved aside).
 const newFileMode = 0o644
 
-// Write writes files under the config lock (LockConfig) the caller holds:
+// writeHook, when set, runs at the named steps of a replace (tests: an editor saving
+// at the worst moment).
+var writeHook func(step, path string)
+
+func hook(step, path string) {
+	if writeHook != nil {
+		writeHook(step, path)
+	}
+}
+
+// Write writes files under the config lock (LockConfig) the caller holds. Editors do
+// not take that lock, so a replace never trusts a check made earlier:
 //
-//   - create: a temporary file linked into place, so an existing file (another
-//     setup, an editor) is never replaced;
-//   - append, replace: the file must still have the content the change was computed
-//     from (File.Base), else nothing more is written; a replaced file is first copied
-//     to a backup that never overwrites anything (File.Backup gets the name used);
-//     then a temporary file with the old mode is renamed over it.
+//   - create: a temporary file renamed into place without replacing (RENAME_EXCL):
+//     a file there (another setup, an editor) is never replaced;
+//   - append, replace: the new content goes to a temporary file first. Then the
+//     current file is moved aside (rename, to the backup name or a hidden name) and
+//     the moved file is hashed: if it is not the content the change was computed from
+//     (File.Base), it is moved back and nothing is written. If it is, the new file is
+//     renamed into place without replacing: a save that landed after the move
+//     recreated the file, so the placement fails and both are kept (the save in
+//     place, the old content aside). Only then is the aside copy removed (append) or
+//     kept as the backup (replace; File.Backup gets the name used).
 //
-// A reader always sees the old or the new content, never a part.
+// The moved-aside file is never lost: every failure leaves it in place or under a
+// name the error gives. A reader sees the old or the new file (or, for an instant,
+// none), never a part.
 func Write(files []File) error {
 	for i := range files {
 		f := &files[i]
@@ -42,50 +59,91 @@ func Write(files []File) error {
 			}
 			continue
 		}
-		st, err := os.Stat(f.Path)
-		if err != nil {
-			return err
-		}
-		old, err := os.ReadFile(f.Path)
-		if err != nil {
-			return err
-		}
-		if f.Base != "" && Sum(old) != f.Base {
-			return errChanged(f.Path)
-		}
-		if f.Backup != "" {
-			if f.Backup, err = CreateUnique(f.Backup, old, 0o600); err != nil {
-				return fmt.Errorf("back up %s: %w", f.Path, err)
-			}
-		}
-		if err := WriteAtomic(f.Path, f.Content, st.Mode().Perm()); err != nil {
+		if err := replace(f); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// CreateNew writes data to path only if nothing is there: a temporary file in the
-// same directory, hard-linked to path (link never replaces; an existing path is
-// fs.ErrExist), then the temporary name is removed.
-func CreateNew(path string, data []byte, perm os.FileMode) error {
-	tmp, err := writeTemp(path, data, perm)
+// replace puts f.Content at f.Path (append, replace) as Write describes.
+func replace(f *File) error {
+	st, err := os.Stat(f.Path)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = os.Remove(tmp) }()
-	return os.Link(tmp, path)
+	tmp, err := writeTemp(f.Path, f.Content, st.Mode().Perm())
+	if err != nil {
+		return err
+	}
+	defer func() { _ = os.Remove(tmp) }() // a no-op once it is in place
+	aside := f.Backup
+	if aside == "" {
+		aside = filepath.Join(filepath.Dir(f.Path), "."+filepath.Base(f.Path)+".otag-old")
+	}
+	hook("aside", f.Path)
+	if aside, err = RenameUnique(f.Path, aside); err != nil {
+		return err
+	}
+	old, err := os.ReadFile(aside)
+	if err == nil && f.Base != "" && Sum(old) != f.Base {
+		err = errChanged(f.Path)
+	}
+	if err != nil {
+		if rerr := renameNoReplace(aside, f.Path); rerr != nil {
+			return apperr.New(apperr.Conflict, "%v; %s was saved again meanwhile: that save is kept, and the version before it is %s",
+				errText(err), f.Path, aside)
+		}
+		return err
+	}
+	hook("place", f.Path)
+	if err := renameNoReplace(tmp, f.Path); err != nil {
+		if errors.Is(err, fs.ErrExist) {
+			return apperr.New(apperr.Conflict, "%s was saved while otag was writing it: your save is kept and otag's change was not written "+
+				"(the version before your save is %s); run the command again", f.Path, aside)
+		}
+		if rerr := renameNoReplace(aside, f.Path); rerr != nil {
+			return fmt.Errorf("%w (and %s is still at %s: %v)", err, f.Path, aside, rerr)
+		}
+		return err
+	}
+	if f.Backup != "" {
+		f.Backup = aside
+		return nil
+	}
+	return os.Remove(aside)
+}
+
+func errText(err error) string {
+	if e, ok := apperr.As(err); ok {
+		return e.Message
+	}
+	return err.Error()
+}
+
+// CreateNew writes data to path only if nothing is there: a temporary file in the
+// same directory, renamed into place without replacing (an existing path is
+// fs.ErrExist).
+func CreateNew(path string, data []byte, perm os.FileMode) error {
+	_, err := createAt(path, data, perm, false)
+	return err
 }
 
 // CreateUnique is CreateNew at base, else base-2, base-3, ...; it returns the path used.
 func CreateUnique(base string, data []byte, perm os.FileMode) (string, error) {
-	for n := 1; ; n++ {
-		p := numbered(base, n)
-		err := CreateNew(p, data, perm)
-		if !errors.Is(err, fs.ErrExist) {
-			return p, err
-		}
+	return createAt(base, data, perm, true)
+}
+
+func createAt(base string, data []byte, perm os.FileMode, number bool) (string, error) {
+	tmp, err := writeTemp(base, data, perm)
+	if err != nil {
+		return "", err
 	}
+	defer func() { _ = os.Remove(tmp) }()
+	if !number {
+		return base, renameNoReplace(tmp, base)
+	}
+	return RenameUnique(tmp, base)
 }
 
 // RenameUnique moves from to base (else base-2, base-3, ...) without ever replacing
@@ -93,15 +151,24 @@ func CreateUnique(base string, data []byte, perm os.FileMode) (string, error) {
 func RenameUnique(from, base string) (string, error) {
 	for n := 1; ; n++ {
 		p := numbered(base, n)
-		err := os.Link(from, p)
+		err := renameNoReplace(from, p)
 		if errors.Is(err, fs.ErrExist) {
 			continue
 		}
 		if err != nil {
 			return "", err
 		}
-		return p, os.Remove(from)
+		return p, nil
 	}
+}
+
+// linkRename is a no-replace rename through a hard link (an existing target is
+// fs.ErrExist) and an unlink of the old name.
+func linkRename(from, to string) error {
+	if err := os.Link(from, to); err != nil {
+		return err
+	}
+	return os.Remove(from)
 }
 
 func numbered(base string, n int) string {

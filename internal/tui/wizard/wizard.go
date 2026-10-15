@@ -402,8 +402,14 @@ func (m *Model) collect(check bool) string {
 		if p == nil {
 			return ""
 		}
-		p.Name = strings.TrimSpace(m.f.Get("name"))
-		p.Prefix = strings.TrimSpace(m.f.Get("prefix"))
+		name, prefix := strings.TrimSpace(m.f.Get("name")), strings.TrimSpace(m.f.Get("prefix"))
+		if name != p.Name {
+			p.AutoName = false
+		}
+		if prefix != p.Prefix {
+			p.AutoPrefix = false
+		}
+		p.Name, p.Prefix = name, prefix
 		p.Workspace = m.f.Get("workspace")
 		p.Guard = m.f.Get("guard")
 		p.Coordinator, p.Default, p.Review = m.f.Get("coord"), m.f.Get("default"), m.f.Get("review")

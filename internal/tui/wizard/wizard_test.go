@@ -287,7 +287,7 @@ func TestFlowWritesChoices(t *testing.T) {
 	if opus.Model != "claude-opus-4" || sonnet.Effort != "medium" || !slices.Equal(opus.Fallback, []string{"opencode", "claude-sonnet"}) {
 		t.Fatalf("opus %+v sonnet %+v", opus, sonnet)
 	}
-	if p := c.Project; p == nil || p.Prefix != "ma" || p.Review != "opencode" || !c.Daemon || !c.Skill {
+	if p := c.Project; p == nil || p.Prefix != "ma" || p.AutoPrefix || !p.AutoName || p.Review != "opencode" || !c.Daemon || !c.Skill {
 		t.Fatalf("project %+v daemon %v skill %v", p, c.Daemon, c.Skill)
 	}
 	x.key("y")
