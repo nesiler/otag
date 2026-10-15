@@ -3,8 +3,10 @@ package cli
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -69,6 +71,32 @@ func (a *app) prober() setup.Prober {
 		ClaudeConfigDir: a.env.Getenv("CLAUDE_CONFIG_DIR")}
 }
 
+// lockConfig takes the config lock and undoes interrupted changes (setup.Recover):
+// every command that reads the config to change it, or to sync it, starts here. The
+// notes say what was restored. Without a config dir there is nothing to lock or
+// recover (and nothing is created): unlock is then a no-op.
+func (a *app) lockConfig() (unlock func(), notes []string, err error) {
+	dir := a.configDir()
+	if _, err := os.Stat(dir); errors.Is(err, fs.ErrNotExist) {
+		return func() {}, nil, nil
+	}
+	if unlock, err = setup.LockConfig(dir, 10*time.Second); err != nil {
+		return nil, nil, err
+	}
+	if notes, err = setup.Recover(dir); err != nil {
+		unlock()
+		return nil, notes, err
+	}
+	return unlock, notes, nil
+}
+
+// notes prints what lockConfig restored.
+func (a *app) notes(notes []string) {
+	for _, n := range notes {
+		_, _ = fmt.Fprintf(a.env.Stderr, "otag: %s\n", n)
+	}
+}
+
 // configured reports whether registry.toml exists.
 func (a *app) configured() bool {
 	_, err := os.Stat(setup.RegistryFile(a.configDir()))
@@ -79,6 +107,14 @@ func (a *app) configured() bool {
 // only when it already exists, and the daemon and skill are checked by their files.
 func (a *app) setupBase(ctx context.Context, force bool, detect bool) (setup.Base, error) {
 	b := setup.Base{ConfigDir: a.configDir(), Home: a.home(), Force: force}
+	// An interrupted change is undone first (briefly under the lock), so a registry
+	// left aside is found again and never taken for a fresh machine.
+	unlock, notes, err := a.lockConfig()
+	if err != nil {
+		return b, err
+	}
+	unlock()
+	a.notes(notes)
 	if detect {
 		b.Detect = a.prober().Detect(ctx, a.env.Cwd)
 		// A task's worktree is otag's, never a project.
@@ -86,7 +122,9 @@ func (a *app) setupBase(ctx context.Context, force bool, detect bool) (setup.Bas
 			b.Detect.Repo = ""
 		}
 	}
-	cfg, exists, err := setup.LoadExisting(b.ConfigDir, a.env.Getenv)
+	var cfg *registry.Config
+	var exists bool
+	cfg, exists, err = setup.LoadExisting(b.ConfigDir, a.env.Getenv)
 	b.RegistryExists = exists
 	switch {
 	case exists && force:
@@ -217,6 +255,11 @@ func (a *app) applySetup(ctx context.Context, b setup.Base, c setup.Choices) (in
 		return data, err
 	}
 	defer unlock()
+	notes, err := setup.Recover(b.ConfigDir)
+	data.Warnings = append(data.Warnings, notes...)
+	if err != nil {
+		return data, err
+	}
 	d, err := a.openDB(ctx)
 	if err != nil {
 		return data, err

@@ -218,14 +218,12 @@ func projectRemove(ctx context.Context, a *app, args []string) (result, error) {
 	if len(pos) != 1 {
 		return result{}, usageErr("usage: otag project remove <name>")
 	}
-	if !a.configured() {
-		return result{}, errNotConfigured(a.configDir())
-	}
-	unlock, err := setup.LockConfig(a.configDir(), 10*time.Second)
+	unlock, notes, err := a.lockConfig()
 	if err != nil {
 		return result{}, err
 	}
 	defer unlock()
+	a.notes(notes)
 	cfg, err := a.loadRegistry()
 	if err != nil {
 		return result{}, err
@@ -248,17 +246,23 @@ func projectRemove(ctx context.Context, a *app, args []string) (result, error) {
 	if err := noLiveRuns(ctx, d, proj.Name); err != nil {
 		return result{}, err
 	}
-	kept, err := setup.RenameUnique(proj.File, proj.File+".removed-"+time.Now().Format("20060102-150405"))
-	if err != nil {
+	// The file waits under a hidden name until the project is retired: a crash in
+	// between leaves it there, and the next config command puts it back
+	// (setup.Recover), so a removal is complete or not at all.
+	removing := setup.RemovingName(proj.File)
+	if err := setup.RenameNoReplace(proj.File, removing); err != nil {
 		return result{}, err
 	}
 	sr, err := retireProject(ctx, a, d, proj.Name)
 	if err != nil {
 		// Put the file back (never over a new one): the registry stays as it was.
-		if rerr := os.Link(kept, proj.File); rerr != nil {
-			return result{}, fmt.Errorf("%w (and restoring %s from %s failed: %v)", err, proj.File, kept, rerr)
+		if rerr := setup.RenameNoReplace(removing, proj.File); rerr != nil {
+			return result{}, fmt.Errorf("%w (and restoring %s from %s failed: %v)", err, proj.File, removing, rerr)
 		}
-		_ = os.Remove(kept)
+		return result{}, err
+	}
+	kept, err := setup.RenameUnique(removing, proj.File+".removed-"+time.Now().Format("20060102-150405"))
+	if err != nil {
 		return result{}, err
 	}
 	data := map[string]any{"project": proj.Name, "file": kept, "sync": sr}

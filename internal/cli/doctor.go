@@ -38,9 +38,26 @@ func cmdDoctor(ctx context.Context, a *app, args []string) (result, error) {
 	}
 	reg := setup.RegistryFile(a.configDir())
 
+	// Files an interrupted otag change left aside (setup.Leftovers; doctor only looks).
+	leftovers, _ := setup.Leftovers(a.configDir())
+	regAside := false
+	for _, l := range leftovers {
+		if l.Both {
+			add("interrupted change", "fail", "keep the version you want as "+shq(l.Original)+" and delete the other ("+
+				shq(l.Aside)+"); otag changes the config again only then",
+				"both %s and %s exist: an otag change was interrupted after you saved the file again", l.Aside, l.Original)
+			continue
+		}
+		regAside = regAside || l.Original == reg
+		add("interrupted change", "fail", "otag sync   (puts it back)",
+			"%s is missing: an interrupted otag change left it as %s", l.Original, l.Aside)
+	}
+
 	var cfg *registry.Config
 	if !a.configured() {
-		add("registry", "fail", "otag init", "otag is not set up yet: %s does not exist", reg)
+		if !regAside {
+			add("registry", "fail", "otag init", "otag is not set up yet: %s does not exist", reg)
+		}
 	} else if c, err := registry.Load(a.configDir(), a.env.Getenv); err != nil {
 		add("registry", "fail", "edit the files under "+shq(a.configDir())+", then `otag sync` (or start over: `otag init --force`)",
 			"%s", errText(err))

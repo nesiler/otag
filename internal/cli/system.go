@@ -20,7 +20,6 @@ import (
 	"github.com/nesiler/otag/internal/quota"
 	"github.com/nesiler/otag/internal/registry"
 	"github.com/nesiler/otag/internal/run"
-	"github.com/nesiler/otag/internal/setup"
 	"github.com/nesiler/otag/internal/task"
 )
 
@@ -43,12 +42,15 @@ func (a *app) sync(ctx context.Context, args []string, held bool) (result, error
 	if _, err := parse(fs, args); err != nil {
 		return result{}, err
 	}
-	if !held && a.configured() {
-		unlock, err := setup.LockConfig(a.configDir(), 10*time.Second)
+	// The lock comes before anything is looked at: registry.toml can be missing for an
+	// instant while init replaces it.
+	if !held {
+		unlock, notes, err := a.lockConfig()
 		if err != nil {
 			return result{}, err
 		}
 		defer unlock()
+		a.notes(notes)
 	}
 	cfg, err := registry.Load(a.configDir(), a.env.Getenv)
 	if err != nil {
