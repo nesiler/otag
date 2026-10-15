@@ -72,6 +72,49 @@ func TestDetachedReviewWorktreeRound2(t *testing.T) {
 		t.Fatalf("pack-refs: %v %s", err, out)
 	}
 	check()
+	// Round 3: single quotes and escapes make substitutions text; double quotes do not.
+	for _, cmd := range []string{"git commit -m 'Document `rm -rf /var/cache/otag` cleanup'",
+		`git commit -m 'run $(git switch other) by hand'`, "git commit -m \"see \\`git switch x\\`\"",
+		`echo "\$(git switch other)"`, `git commit -m "it's \$(git branch x)"`} {
+		if d := p.CheckCommand(cmd); !d.Allow {
+			t.Errorf("denied %q: %s", cmd, d.Reason)
+		}
+	}
+	for _, cmd := range []string{"git commit -m \"Document `git switch other`\"", `echo 'x' "$(git branch y)"`,
+		`echo "it's $(git switch other)"`, "echo '`a`'`git branch z`"} {
+		if d := p.CheckCommand(cmd); d.Allow {
+			t.Errorf("allowed %q", cmd)
+		}
+	}
+	// A directory of nested branches is not a branch: with docs/update and no branch
+	// docs, `git checkout docs` restores the directory docs; with the remote branch
+	// origin/feat/x, `git checkout feat` likewise (feat is a file here).
+	if out, err := exec.Command("git", "-C", wd, "branch", "-D", "docs").CombinedOutput(); err != nil {
+		t.Fatalf("%v %s", err, out)
+	}
+	for _, args := range [][]string{{"branch", "docs/update"}, {"update-ref", "-d", "refs/remotes/origin/feat"},
+		{"update-ref", "refs/remotes/origin/feat/x", "HEAD"}} {
+		if out, err := exec.Command("git", append([]string{"-C", wd}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v %s", args, err, out)
+		}
+	}
+	for _, cmd := range []string{"git checkout docs", "git checkout feat"} {
+		if d := p.CheckCommand(cmd); !d.Allow {
+			t.Errorf("loose refs: denied %q: %s", cmd, d.Reason)
+		}
+	}
+	if d := p.CheckCommand("git checkout docs/update"); d.Allow {
+		t.Error("checkout of the nested branch allowed")
+	}
+	if out, err := exec.Command("git", "-C", wd, "pack-refs", "--all", "--prune").CombinedOutput(); err != nil {
+		t.Fatalf("pack-refs: %v %s", err, out)
+	}
+	for _, cmd := range []string{"git checkout docs", "git checkout feat"} {
+		if d := p.CheckCommand(cmd); !d.Allow {
+			t.Errorf("packed refs: denied %q: %s", cmd, d.Reason)
+		}
+	}
+
 	// Refs that cannot be read: a path operand without "--" is refused, with "--" not.
 	unknown := Policy{Workdir: t.TempDir(), Level: Light, Detached: true}
 	_ = os.WriteFile(filepath.Join(unknown.Workdir, "main.go"), []byte("x"), 0o644)

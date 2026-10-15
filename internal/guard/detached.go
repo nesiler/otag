@@ -115,15 +115,26 @@ func (p Policy) checkSubstitutions(line string, depth int) Decision {
 	return allow
 }
 
-// substitutions returns the bodies of the outermost $(...) and `...` in s, wherever
-// they are; an unterminated one runs to the end.
+// substitutions returns the bodies of the outermost $(...) and `...` in s that the
+// shell expands: outside quotes and inside double quotes, not inside single quotes
+// ('`rm -rf x`' is text), and not escaped (\$(, \`). An unterminated one runs to the
+// end.
 func substitutions(s string) []string {
 	var out []string
 	rs := []rune(s)
+	inSingle, inDouble := false, false
 	for i := 0; i < len(rs); i++ {
 		switch {
+		case inSingle:
+			if rs[i] == '\'' {
+				inSingle = false
+			}
 		case rs[i] == '\\':
 			i++
+		case rs[i] == '\'' && !inDouble:
+			inSingle = true
+		case rs[i] == '"':
+			inDouble = !inDouble
 		case rs[i] == '`':
 			j := i + 1
 			for j < len(rs) && rs[j] != '`' {
@@ -174,10 +185,12 @@ func (p Policy) branchNamed(name string) (branch, known bool) {
 	if _, err := os.Stat(filepath.Join(common, "reftable")); err == nil {
 		return false, false // one binary store: not read here
 	}
-	if _, err := os.Stat(filepath.Join(common, "refs", "heads", filepath.FromSlash(name))); err == nil {
+	// Only a ref file is a branch: refs/heads/docs/ is the directory of docs/update.
+	if isFile(filepath.Join(common, "refs", "heads", filepath.FromSlash(name))) {
 		return true, true
 	}
-	if m, _ := filepath.Glob(filepath.Join(common, "refs", "remotes", "*", filepath.FromSlash(name))); len(m) > 0 {
+	m, _ := filepath.Glob(filepath.Join(common, "refs", "remotes", "*", filepath.FromSlash(name)))
+	if slices.ContainsFunc(m, isFile) {
 		return true, true
 	}
 	f, err := os.Open(filepath.Join(common, "packed-refs"))
@@ -204,6 +217,11 @@ func (p Policy) branchNamed(name string) (branch, known bool) {
 		}
 	}
 	return false, sc.Err() == nil
+}
+
+func isFile(path string) bool {
+	st, err := os.Stat(path)
+	return err == nil && st.Mode().IsRegular()
 }
 
 // gitCommonDir returns the git common directory of the checkout at workdir: its .git
