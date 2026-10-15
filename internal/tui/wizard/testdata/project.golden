@@ -1,0 +1,24 @@
+ otag setup │ step 6 of 9: Project
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ Project                                                                      │
+│                                                                              │
+│ [x] Register ~/dev/myapp as a project                                        │
+│ name:        myapp                                                           │
+│ prefix:      mya                                                             │
+│ workspace:   ‹ worktree (a git worktree per task) ›                          │
+│ guard:       ‹ light (default) ›                                             │
+│ coordinator: ‹ claude-opus (claude) ›                                        │
+│ default:     ‹ claude-sonnet (claude) ›                                      │
+│ review:      ‹ codex (codex) ›                                               │
+│ deny:        .env*, *.pem                                                    │
+│                                                                              │
+│ The coordinator plans and starts tasks; children run the default profile; a  │
+│ review is best on another model family.                                      │
+│                                                                              │
+│ [ Next ]  [ Back ]  [ Cancel ]                                               │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+ tab ↑↓ move · space toggle · ←→ choose · ctrl+s next · esc cancel

@@ -1,0 +1,24 @@
+ otag setup │ step 3 of 9: Profiles: Claude Code
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ Profiles: Claude Code                                                        │
+│                                                                              │
+│ [x] claude-opus  Coordinator and hard tasks                                  │
+│   model:  opus                                                               │
+│   effort: ‹ high ›                                                           │
+│ [x] claude-sonnet  Default worker                                            │
+│   model:  sonnet                                                             │
+│   effort: ‹ default ›                                                        │
+│ [x] claude-haiku  Fast, simple tasks                                         │
+│   model:  haiku                                                              │
+│   effort: ‹ default ›                                                        │
+│                                                                              │
+│ Fallbacks, set for you (used on quota limits and failed launches):           │
+│   claude-opus → codex → opencode → claude-sonnet                             │
+│   claude-sonnet → codex-medium → opencode → claude-haiku                     │
+│   claude-haiku → codex-medium → opencode                                     │
+│                                                                              │
+│ [ Next ]  [ Back ]  [ Cancel ]                                               │
+│                                                                              │
+│                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+ tab ↑↓ move · space toggle · ←→ choose · ctrl+s next · esc cancel

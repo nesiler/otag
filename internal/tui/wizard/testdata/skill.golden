@@ -1,0 +1,24 @@
+ otag setup │ step 8 of 9: Agent skill
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ Agent skill                                                                  │
+│                                                                              │
+│ [ ] Install the otag skill for Claude Code, Codex and OpenCode               │
+│                                                                              │
+│ It teaches the agents when to use otag. It writes global agent config        │
+│ (~/.agents/skills/otag and a link in ~/.claude/skills), so it is off by      │
+│ default. Same as `otag skill install`.                                       │
+│                                                                              │
+│ [ Next ]  [ Back ]  [ Cancel ]                                               │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+ tab ↑↓ move · space toggle · ←→ choose · ctrl+s next · esc cancel

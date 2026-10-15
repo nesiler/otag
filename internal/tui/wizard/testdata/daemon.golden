@@ -1,0 +1,24 @@
+ otag setup │ step 7 of 9: Background service
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ Background service                                                           │
+│                                                                              │
+│ [x] Install the otag daemon (launchd)                                        │
+│                                                                              │
+│ The daemon (launch agent io.github.nesiler.otag) reaps crashed runs,         │
+│ restarts stalled ones, falls back to another profile on quota limits and     │
+│ retries queued messages. Same as `otag daemon install`; `otag daemon         │
+│ uninstall` removes it.                                                       │
+│                                                                              │
+│ [ Next ]  [ Back ]  [ Cancel ]                                               │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+ tab ↑↓ move · space toggle · ←→ choose · ctrl+s next · esc cancel

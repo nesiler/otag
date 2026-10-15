@@ -1,0 +1,24 @@
+ otag setup │ step 4 of 9: Profiles: Codex CLI
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ Profiles: Codex CLI                                                          │
+│                                                                              │
+│ [x] codex  Hard tasks and reviews                                            │
+│   model:  default: the model in ~/.codex/config.toml                         │
+│   effort: ‹ high ›                                                           │
+│ [x] codex-medium  Everyday tasks at medium effort                            │
+│   model:  default: the model in ~/.codex/config.toml                         │
+│   effort: ‹ medium ›                                                         │
+│                                                                              │
+│ Fallbacks, set for you (used on quota limits and failed launches):           │
+│   codex → claude-opus → opencode → codex-medium                              │
+│   codex-medium → claude-sonnet → opencode                                    │
+│                                                                              │
+│ [ Next ]  [ Back ]  [ Cancel ]                                               │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+ tab ↑↓ move · space toggle · ←→ choose · ctrl+s next · esc cancel

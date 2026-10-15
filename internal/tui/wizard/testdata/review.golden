@@ -1,0 +1,24 @@
+ otag setup │ step 9 of 9: Review
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ Review                                                                       │
+│                                                                              │
+│ Files:                                                                       │
+│   create  ~/.config/otag/registry.toml                                       │
+│   create  ~/.config/otag/projects/myapp.toml                                 │
+│ Then:                                                                        │
+│   otag sync             load the config into the database                    │
+│   otag daemon install   start the background service                         │
+│ Project myapp (prefix mya, worktree, guard light):                           │
+│   coordinator claude-opus · default claude-sonnet · review codex             │
+│ Profiles:                                                                    │
+│   claude-opus    opus, high  → codex, opencode, claude-sonnet                │
+│   claude-sonnet  sonnet  → codex-medium, opencode, claude-haiku              │
+│   claude-haiku   haiku  → codex-medium, opencode                             │
+│   codex          default model, high  → claude-opus, opencode, codex-medium  │
+│   codex-medium   default model, medium  → claude-sonnet, opencode            │
+│   opencode       default model  → claude-sonnet, codex-medium                │
+│                                                                              │
+│ [ Write ]  [ Back ]  [ Cancel ]                                              │
+│                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+ ←→ tab choose a button · enter press it · pgup pgdn scroll · esc cancel

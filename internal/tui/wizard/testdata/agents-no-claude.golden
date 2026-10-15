@@ -1,0 +1,24 @@
+ otag setup │ step 2 of 9: Agents
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ Agents                                                                       │
+│                                                                              │
+│ Choose the agent CLIs otag may run. Each becomes an account that uses your   │
+│ normal login (no separate config dir).                                       │
+│                                                                              │
+│ [ ] Claude Code (claude)  claude 1.2.3                                       │
+│ [x] Codex CLI (codex)  codex 1.2.3                                           │
+│ [x] OpenCode (opencode)  opencode 1.2.3                                      │
+│                                                                              │
+│ Without Claude Code there is no coordinator (it runs on Claude only for      │
+│ now); child tasks still run on the other agents, started by you or a script. │
+│                                                                              │
+│ [ Next ]  [ Back ]  [ Cancel ]                                               │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+ tab ↑↓ move · space toggle · ←→ choose · ctrl+s next · esc cancel

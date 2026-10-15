@@ -50,6 +50,8 @@ type Field struct {
 	Text     string // Note
 	Off      int    // List, Note: first row shown
 	Keep     bool   // List: keep a disabled preselection (submitting it says why)
+	// Placeholder shows, dim, in an empty Text or Area ("" = a blank line).
+	Placeholder string
 }
 
 // Value is the field's value: the text, the chosen option, or "true" / "".
@@ -428,13 +430,13 @@ func (f *Form) View(width int, th style.Theme) ([]string, []Hit) {
 			if focused {
 				c = cursor
 			}
-			rows := fl.Ed.View(ew, h, c, "", th.Dim.Render)
+			rows := fl.Ed.View(ew, h, c, fl.Placeholder, th.Dim.Render)
 			for r, row := range rows {
 				l := strings.Repeat(" ", lw)
 				if r == 0 {
 					l = label(fl, focused)
 				}
-				if !focused && row == "" && r == 0 {
+				if !focused && row == "" && r == 0 && fl.Placeholder == "" {
 					row = th.Dim.Render(strings.Repeat("_", min(ew, 20)))
 				}
 				lines = append(lines, l+row)

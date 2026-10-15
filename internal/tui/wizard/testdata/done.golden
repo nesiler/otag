@@ -1,0 +1,24 @@
+ otag setup │ Done
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ otag is set up                                                               │
+│                                                                              │
+│ wrote ~/.config/otag/registry.toml                                           │
+│ synced the database                                                          │
+│                                                                              │
+│ Next: start the coordinator with `otag coord myapp --attach`, or open the    │
+│ TUI and press c on a project.                                                │
+│                                                                              │
+│ Open the TUI now?                                                            │
+│                                                                              │
+│ [ Open the TUI (y) ]  [ Quit (n) ]                                           │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+ y open the TUI · n quit · pgup pgdn scroll

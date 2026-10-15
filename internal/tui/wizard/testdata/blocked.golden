@@ -1,0 +1,24 @@
+ otag setup │ step 1 of 7: Welcome
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ Welcome to otag                                                              │
+│                                                                              │
+│ otag runs your AI coding agents in tmux and coordinates them. This setup     │
+│ writes its config to ~/.config/otag; nothing is written before the last      │
+│ step.                                                                        │
+│                                                                              │
+│ Found on this Mac:                                                           │
+│   ✓ Claude Code  claude 1.2.3  ~/.claude                                     │
+│   ✗ Codex CLI    not found: npm install -g @openai/codex                     │
+│   ✗ OpenCode     not found: curl -fsSL https://opencode.ai/install | bash    │
+│   ✗ tmux         not found: brew install tmux                                │
+│   ✓ git          git version 2.50.1                                          │
+│   ✓ project      ~/dev/myapp (git repository)                                │
+│                                                                              │
+│ otag needs tmux. Install, then run otag again:                               │
+│   brew install tmux                                                          │
+│                                                                              │
+│ [ Quit ]                                                                     │
+│                                                                              │
+│                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+ enter quit
