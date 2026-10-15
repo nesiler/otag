@@ -443,9 +443,15 @@ target (rm removes the link). At both levels a `cd` inside `( )`, `$( )` or `<( 
 not move the commands after it.
 
 **Detached review worktrees (both levels).** A review run's worktree is a detached
-checkout of the reviewed head, so the run has no own branch (`Branch = ""`): every
-branch move, rename, delete and `checkout -B`/`switch -C`, `update-ref` and push is
-refused; reading, building, testing and commits on the detached HEAD are not. Claude
+checkout of the reviewed head, so the run has no own branch (`Branch = ""`) and the
+hook context marks it detached (`Policy.Detached`). HEAD must stay detached and no ref
+may change: `switch`/`checkout` onto a branch (`-b/-B/-c/-C/--orphan` too), branch and
+tag creation, moves and deletes, `symbolic-ref`, `stash branch`, `worktree add`, `rebase
+<upstream> <branch>`, fetch refspecs with a destination, `notes`/`replace` writes,
+`update-ref`, pushes, and such commands hidden in substitutions are refused; restoring
+files (`checkout -- <paths>`, `restore`), detaching at another commit (`switch --detach`,
+`checkout <commit>`), commits and resets of the detached HEAD, reading, building and
+testing are not. In a light run this hook guard is the only boundary. Claude
 keeps the `.git` pointer and every branch ref denied in its sandbox (as in any linked
 worktree); Codex's `permissions.otag` makes only `objects` writable in the common git
 dir (no ref). otag does not dictate what the reviewer does in the checkout.
