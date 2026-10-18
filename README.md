@@ -2,6 +2,12 @@
 
 A command tent for your AI coding agents.
 
+> [!IMPORTANT]
+> **This project is archived and no longer maintained.** The last release is
+> [v0.1.2](https://github.com/nesiler/otag/releases/tag/v0.1.2). Terminal tools such as
+> [cmux](https://github.com/manaflow-ai/cmux) and [herdr](https://github.com/ogulcancelik/herdr)
+> now cover most of what otag set out to do.
+
 [![CI](https://github.com/nesiler/otag/actions/workflows/ci.yml/badge.svg)](https://github.com/nesiler/otag/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/nesiler/otag)](https://github.com/nesiler/otag/releases/latest)
 [![Go version](https://img.shields.io/github/go-mod/go-version/nesiler/otag)](go.mod)
